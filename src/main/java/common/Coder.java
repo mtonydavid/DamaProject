@@ -7,7 +7,7 @@ import model.Piece;
 
 import java.util.Random;
 
-    public class Coder {
+public class Coder {
         public static String encode(Piece piece, int newX, int newY, MoveResult moveResult) {
             String result = pixelToBoard(piece.getOldX()) + " " + pixelToBoard(piece.getOldY()) + " " + newX + " " + newY + " " + moveResult.getMoveType().toString();
             if (moveResult.getMoveType() == MoveType.KILL) {
