@@ -148,6 +148,9 @@ public class ChessBoardClient extends Application {
             colorLabel.setText("Tu giochi" + ((player == 1) ? " GRAY" : " WHITE"));
         }
 
+        // Aggiorna il display del punteggio iniziale
+        scoreDisplay.updateCounts(grayLivePieces, whiteLivePieces, grayKilledPieces, whiteKilledPieces);
+
         return root;
     }
 

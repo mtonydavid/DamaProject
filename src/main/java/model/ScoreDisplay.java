@@ -1,8 +1,11 @@
 package model;
 
 import client.ChessBoardClient;
+import javafx.animation.TranslateTransition;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
+import javafx.geometry.Insets;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -10,6 +13,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.TextAlignment;
+import javafx.util.Duration;
 
 public class ScoreDisplay extends StackPane {
     public static final double width = ChessBoardClient.TILE_SIZE * 2.5;
@@ -25,6 +29,11 @@ public class ScoreDisplay extends StackPane {
     private final Label grayKilledLabel = new Label();
     private final Label whiteKilledLabel = new Label();
 
+    private final Button toggleButton = new Button("◄");
+    private boolean isVisible = true;
+    private final TranslateTransition showTransition;
+    private final TranslateTransition hideTransition;
+
     public ScoreDisplay() {
         Rectangle background = new Rectangle();
         background.setWidth(width);
@@ -37,6 +46,7 @@ public class ScoreDisplay extends StackPane {
 
         VBox scoreBox = new VBox(5);
         scoreBox.setMaxWidth(width * 0.9);
+        scoreBox.setPadding(new Insets(5, 0, 0, 10));
 
         Label titleLabel = new Label("Score");
         titleLabel.setFont(new Font("Arial", height * 0.15));
@@ -75,13 +85,44 @@ public class ScoreDisplay extends StackPane {
                 whiteTitle, whiteLiveLabel, whiteKilledLabel
         );
 
-        getChildren().addAll(background, scoreBox);
+        // Configurazione del pulsante toggle
+        toggleButton.setFont(new Font("Arial", 12));
+        toggleButton.setPrefHeight(height / 4);
+        toggleButton.setTranslateX(-width / 2 - 15); // Posiziona a sinistra del pannello
+
+        // Imposta lo stile del pulsante
+        toggleButton.setStyle("-fx-background-color: #ECD8C6; -fx-border-color: black; -fx-border-radius: 5;");
+
+        getChildren().addAll(background, scoreBox, toggleButton);
 
         // Posiziona il display del punteggio in basso a destra
         relocate(
                 ChessBoardClient.TILE_SIZE * ChessBoardClient.WIDTH - width - 10,
-                ChessBoardClient.TILE_SIZE * ChessBoardClient.HEIGHT - height - 10
+                ChessBoardClient.TILE_SIZE * ChessBoardClient.HEIGHT - height - 30
         );
+
+        // Configura le animazioni
+        showTransition = new TranslateTransition(Duration.millis(300), this);
+        showTransition.setToX(0);
+
+        hideTransition = new TranslateTransition(Duration.millis(300), this);
+        hideTransition.setToX(width + 10);
+
+        // Configura l'azione del pulsante toggle
+        toggleButton.setOnAction(event -> toggleVisibility());
+    }
+
+    public void toggleVisibility() {
+        if (isVisible) {
+            // Nascondi il pannello
+            hideTransition.play();
+            toggleButton.setText("►");
+        } else {
+            // Mostra il pannello
+            showTransition.play();
+            toggleButton.setText("◄");
+        }
+        isVisible = !isVisible;
     }
 
     // Metodi per aggiornare il conteggio
