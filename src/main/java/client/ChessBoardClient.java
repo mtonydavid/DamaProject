@@ -39,6 +39,13 @@ public class ChessBoardClient extends Application {
     private float time = 0;
     private final Timer timer = new Timer();
 
+    // Contatori per tenere traccia delle pedine
+    private int grayLivePieces = 12;
+    private int whiteLivePieces = 12;
+    private int grayKilledPieces = 0;
+    private int whiteKilledPieces = 0;
+    private final ScoreDisplay scoreDisplay = new ScoreDisplay();
+
     private boolean isItMyTurn = false;
 
     public static void main(String[] args) {
@@ -110,7 +117,7 @@ public class ChessBoardClient extends Application {
     private Parent createContent() {
         Pane root = new Pane();
         root.setPrefSize(WIDTH * TILE_SIZE, HEIGHT * TILE_SIZE);
-        root.getChildren().addAll(tileGroup, pieceGroup, colorLabel, timer);
+        root.getChildren().addAll(tileGroup, pieceGroup, colorLabel, timer, scoreDisplay);
 
         for (int y = 0; y < 8; y++) {
             for (int x = 0; x < 8; x++) {
@@ -272,6 +279,19 @@ public class ChessBoardClient extends Application {
                 Piece otherPiece = moveResult.getPiece();
                 board[Coder.pixelToBoard(otherPiece.getOldX())][Coder.pixelToBoard(otherPiece.getOldY())].setPiece(null);
                 Platform.runLater(() -> pieceGroup.getChildren().remove(otherPiece));
+
+                // Aggiorna il conteggio delle pedine catturate
+                if (otherPiece.getPieceType() == PieceType.GRAY || otherPiece.getPieceType() == PieceType.GRAY_SUP) {
+                    grayLivePieces--;
+                    whiteKilledPieces++;
+                } else {
+                    whiteLivePieces--;
+                    grayKilledPieces++;
+                }
+
+                // Aggiorna il display del punteggio
+                Platform.runLater(() -> scoreDisplay.updateCounts(grayLivePieces, whiteLivePieces, grayKilledPieces, whiteKilledPieces));
+
                 if (!mode.equals("local")) {
                     isItMyTurn = false;
                 }
