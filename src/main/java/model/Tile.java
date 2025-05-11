@@ -4,28 +4,76 @@ import client.ChessBoardClient;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 
-    public class Tile extends Rectangle {
-        private Piece piece;
+public class Tile extends Rectangle {
+    private Piece piece;
+    private boolean isHighlighted = false;
+    private final boolean isLight;
+    private final int x, y;
 
-        public boolean hasPiece() {
-            return piece != null;
-        }
+    // Colori per le celle
+    private static final Color LIGHT_COLOR = Color.valueOf("#FFFACD");
+    private static final Color DARK_COLOR = Color.valueOf("#8B4513");
+    private static final Color HIGHLIGHT_COLOR = Color.valueOf("#55FF55");
+    private static final Color HIGHLIGHT_BORDER_COLOR = Color.valueOf("#00AA00");
 
-        public Piece getPiece() {
-            return piece;
-        }
+    public Tile(boolean isLight, int x, int y) {
+        this.isLight = isLight;
+        this.x = x;
+        this.y = y;
 
-        public void setPiece(Piece piece) {
-            this.piece = piece;
-        }
+        setWidth(ChessBoardClient.TILE_SIZE);
+        setHeight(ChessBoardClient.TILE_SIZE);
+        relocate(x * ChessBoardClient.TILE_SIZE, y * ChessBoardClient.TILE_SIZE);
 
-        public Tile(boolean light, int x, int y) {
-            setWidth(ChessBoardClient.TILE_SIZE);
-            setHeight(ChessBoardClient.TILE_SIZE);
+        // Imposta il colore iniziale della cella
+        setFill(isLight ? LIGHT_COLOR : DARK_COLOR);
+    }
 
-            relocate(x * ChessBoardClient.TILE_SIZE, y * ChessBoardClient.TILE_SIZE);
+    public boolean hasPiece() {
+        return piece != null;
+    }
 
-            setFill(light ? Color.valueOf("#C1A89F") : Color.valueOf("#5D5364"));
+    public Piece getPiece() {
+        return piece;
+    }
+
+    public void setPiece(Piece piece) {
+        this.piece = piece;
+    }
+
+    public int getX() {
+        return x;
+    }
+
+    public int getY() {
+        return y;
+    }
+
+    /**
+     * Evidenzia la cella come mossa possibile.
+     */
+    public void highlight() {
+        if (!isLight) { // Evidenziamo solo le celle scure (quelle valide per la dama)
+            isHighlighted = true;
+            setFill(HIGHLIGHT_COLOR);
+            setStroke(HIGHLIGHT_BORDER_COLOR);
+            setStrokeWidth(2.0);
         }
     }
 
+    /**
+     * Rimuove l'evidenziazione.
+     */
+    public void removeHighlight() {
+        isHighlighted = false;
+        setFill(isLight ? LIGHT_COLOR : DARK_COLOR);
+        setStroke(null);
+    }
+
+    /**
+     * Verifica se la cella è evidenziata.
+     */
+    public boolean isHighlighted() {
+        return isHighlighted;
+    }
+}

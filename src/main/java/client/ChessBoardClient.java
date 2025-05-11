@@ -48,6 +48,8 @@ public class ChessBoardClient extends Application {
 
     private boolean isItMyTurn = false;
 
+    private Piece selectedPiece = null;
+
     public static void main(String[] args) {
         if (args.length > 0) {
             // Se ci sono argomenti, avvia direttamente la partita
@@ -157,6 +159,26 @@ public class ChessBoardClient extends Application {
     private Piece makePiece(PieceType pieceType, int x, int y) {
         Piece piece = new Piece(pieceType, x, y);
 
+        piece.setOnMousePressed(e -> {
+            // Se è il turno del giocatore, seleziona la pedina e mostra le mosse disponibili
+            if (("local".equals(mode) &&
+                    ((isItMyTurn && (pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP)) ||
+                            (!isItMyTurn && (pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP)))) ||
+                    ((!mode.equals("local")) && isItMyTurn &&
+                            ((player == 1 && (pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP)) ||
+                                    (player == 2 && (pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP))))) {
+
+                // Rimuovi l'evidenziazione precedente se esiste
+                removeAllHighlights();
+
+                // Seleziona la nuova pedina
+                selectedPiece = piece;
+
+                // Mostra le mosse disponibili
+                highlightPossibleMoves(piece);
+            }
+        });
+
         piece.setOnMouseReleased(e -> {
             int newX = Coder.pixelToBoard(piece.getLayoutX());
             int newY = Coder.pixelToBoard(piece.getLayoutY());
@@ -168,11 +190,15 @@ public class ChessBoardClient extends Application {
                 // Nelle altre modalità, inviamo la richiesta al server
                 requestMove(piece, newX, newY);
             }
+
+            // Rimuovi evidenziazioni dopo la mossa
+            removeAllHighlights();
+            selectedPiece = null;
         });
 
         return piece;
     }
-
+    // Modifica il metodo handleLocalMove per tenere conto dell'evidenziazione
     private void handleLocalMove(Piece piece, int newX, int newY) {
         // Verifica se è il turno del giocatore corretto
         boolean isGrayTurn = isItMyTurn;
@@ -180,6 +206,15 @@ public class ChessBoardClient extends Application {
 
         if (isGrayTurn != isGrayPiece) {
             // Non è il turno di questo pezzo
+            piece.abortMove();
+            return;
+        }
+
+        // Verifica se la cella di destinazione è evidenziata
+        int boardX = Coder.pixelToBoard(piece.getLayoutX());
+        int boardY = Coder.pixelToBoard(piece.getLayoutY());
+
+        if (!isValidCoordinate(boardX, boardY) || !board[boardX][boardY].isHighlighted()) {
             piece.abortMove();
             return;
         }
@@ -244,9 +279,17 @@ public class ChessBoardClient extends Application {
         return new MoveResult(MoveType.NONE);
     }
 
+
+    // Modifica il metodo requestMove per tenere conto dell'evidenziazione
     public void requestMove(Piece piece, int newX, int newY) {
         if (!isItMyTurn) {
             makeMove(piece, newX, newY, new MoveResult(MoveType.NONE));
+            return;
+        }
+
+        // Verifica se la cella di destinazione è evidenziata
+        if (!isValidCoordinate(newX, newY) || !board[newX][newY].isHighlighted()) {
+            piece.abortMove();
             return;
         }
 
@@ -400,6 +443,95 @@ public class ChessBoardClient extends Application {
             closeEverything();
         }).start();
     }
+
+    /**
+     * Evidenzia tutte le celle in cui è possibile muoversi con la pedina selezionata.
+     */
+    private void highlightPossibleMoves(Piece piece) {
+        if (piece == null) return;
+
+        int x = Coder.pixelToBoard(piece.getOldX());
+        int y = Coder.pixelToBoard(piece.getOldY());
+
+        // Verifica le mosse per le pedine normali
+        if (piece.getPieceType() == PieceType.GRAY || piece.getPieceType() == PieceType.WHITE) {
+            // Direzione di movimento (in base al colore)
+            int moveDir = piece.getPieceType().moveDir;
+
+            // Controlla mosse normali (diagonali adiacenti)
+            checkAndHighlightTile(x - 1, y + moveDir);
+            checkAndHighlightTile(x + 1, y + moveDir);
+
+            // Controlla mosse di cattura (diagonali a distanza 2)
+            checkAndHighlightCaptureTile(piece, x - 2, y + moveDir * 2, x - 1, y + moveDir);
+            checkAndHighlightCaptureTile(piece, x + 2, y + moveDir * 2, x + 1, y + moveDir);
+        }
+        // Verifica le mosse per le dame
+        else if (piece.getPieceType() == PieceType.GRAY_SUP || piece.getPieceType() == PieceType.WHITE_SUP) {
+            // Le dame possono muoversi in tutte le direzioni diagonali
+            checkAndHighlightTile(x - 1, y - 1);
+            checkAndHighlightTile(x + 1, y - 1);
+            checkAndHighlightTile(x - 1, y + 1);
+            checkAndHighlightTile(x + 1, y + 1);
+
+            // Controlla mosse di cattura in tutte le direzioni
+            checkAndHighlightCaptureTile(piece, x - 2, y - 2, x - 1, y - 1);
+            checkAndHighlightCaptureTile(piece, x + 2, y - 2, x + 1, y - 1);
+            checkAndHighlightCaptureTile(piece, x - 2, y + 2, x - 1, y + 1);
+            checkAndHighlightCaptureTile(piece, x + 2, y + 2, x + 1, y + 1);
+        }
+    }
+    /**
+     * Verifica se una cella è valida per una mossa normale e la evidenzia.
+     */
+    private void checkAndHighlightTile(int x, int y) {
+        if (isValidCoordinate(x, y) && !board[x][y].hasPiece()) {
+            board[x][y].highlight();
+        }
+    }
+    /**
+     * Verifica se una cella è valida per una mossa di cattura e la evidenzia.
+     */
+    private void checkAndHighlightCaptureTile(Piece piece, int destX, int destY, int middleX, int middleY) {
+        if (isValidCoordinate(destX, destY) && isValidCoordinate(middleX, middleY) &&
+                !board[destX][destY].hasPiece() && board[middleX][middleY].hasPiece()) {
+
+            PieceType pieceType = piece.getPieceType();
+            PieceType middlePieceType = board[middleX][middleY].getPiece().getPieceType();
+
+            // Controlla se la pedina di mezzo è di colore opposto
+            boolean isOpponent = false;
+            if ((pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP) &&
+                    (middlePieceType == PieceType.WHITE || middlePieceType == PieceType.WHITE_SUP)) {
+                isOpponent = true;
+            } else if ((pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP) &&
+                    (middlePieceType == PieceType.GRAY || middlePieceType == PieceType.GRAY_SUP)) {
+                isOpponent = true;
+            }
+
+            if (isOpponent) {
+                board[destX][destY].highlight();
+            }
+        }
+    }
+
+    /**
+     * Rimuove tutte le evidenziazioni dalla scacchiera.
+     */
+    private void removeAllHighlights() {
+        for (int y = 0; y < HEIGHT; y++) {
+            for (int x = 0; x < WIDTH; x++) {
+                board[x][y].removeHighlight();
+            }
+        }
+    }
+    /**
+     * Verifica se le coordinate sono valide.
+     */
+    private boolean isValidCoordinate(int x, int y) {
+        return x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT;
+    }
+
 
     private void closeEverything() {
         try {

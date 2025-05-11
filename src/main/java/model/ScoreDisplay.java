@@ -38,7 +38,7 @@ public class ScoreDisplay extends StackPane {
         Rectangle background = new Rectangle();
         background.setWidth(width);
         background.setHeight(height);
-        background.setFill(Color.valueOf("#ECD8C6"));
+        background.setFill(Color.valueOf("#BEA084"));
         background.setArcWidth(10.0);
         background.setArcHeight(10.0);
         background.setStroke(Color.BLACK);
@@ -46,38 +46,38 @@ public class ScoreDisplay extends StackPane {
 
         VBox scoreBox = new VBox(5);
         scoreBox.setMaxWidth(width * 0.9);
-        scoreBox.setPadding(new Insets(5, 0, 0, 10));
+        scoreBox.setPadding(new Insets(5, 5, 5, 10));
 
         Label titleLabel = new Label("Score");
-        titleLabel.setFont(new Font("Arial", height * 0.15));
+        titleLabel.setFont(new Font("Arial", height * 0.13));
         titleLabel.setTextFill(Color.valueOf("#5D5364"));
         titleLabel.setTextAlignment(TextAlignment.CENTER);
 
         // Labels for GRAY player
         Label grayTitle = new Label("GRAY");
-        grayTitle.setFont(new Font("Arial", height * 0.12));
+        grayTitle.setFont(new Font("Arial", height * 0.11));
         grayTitle.setTextFill(Color.valueOf("#4F4F4F"));
 
         grayLiveLabel.textProperty().bind(new SimpleStringProperty("Live: ").concat(grayLiveCount));
-        grayLiveLabel.setFont(new Font("Arial", height * 0.1));
+        grayLiveLabel.setFont(new Font("Arial", height * 0.09));
         grayLiveLabel.setTextFill(Color.valueOf("#4F4F4F"));
 
         grayKilledLabel.textProperty().bind(new SimpleStringProperty("Captured: ").concat(grayKilledCount));
-        grayKilledLabel.setFont(new Font("Arial", height * 0.1));
+        grayKilledLabel.setFont(new Font("Arial", height * 0.09));
         grayKilledLabel.setTextFill(Color.valueOf("#4F4F4F"));
 
         // Labels for WHITE player
         Label whiteTitle = new Label("WHITE");
-        whiteTitle.setFont(new Font("Arial", height * 0.12));
-        whiteTitle.setTextFill(Color.valueOf("#CEB087"));
+        whiteTitle.setFont(new Font("Arial", height * 0.11));
+        whiteTitle.setTextFill(Color.valueOf("#F8F8F8"));
 
         whiteLiveLabel.textProperty().bind(new SimpleStringProperty("Live: ").concat(whiteLiveCount));
-        whiteLiveLabel.setFont(new Font("Arial", height * 0.1));
-        whiteLiveLabel.setTextFill(Color.valueOf("#CEB087"));
+        whiteLiveLabel.setFont(new Font("Arial", height * 0.09));
+        whiteLiveLabel.setTextFill(Color.valueOf("#F8F8F8"));
 
         whiteKilledLabel.textProperty().bind(new SimpleStringProperty("Captured: ").concat(whiteKilledCount));
-        whiteKilledLabel.setFont(new Font("Arial", height * 0.1));
-        whiteKilledLabel.setTextFill(Color.valueOf("#CEB087"));
+        whiteKilledLabel.setFont(new Font("Arial", height * 0.09));
+        whiteKilledLabel.setTextFill(Color.valueOf("#F8F8F8"));
 
         scoreBox.getChildren().addAll(
                 titleLabel,
@@ -91,7 +91,7 @@ public class ScoreDisplay extends StackPane {
         toggleButton.setTranslateX(-width / 2 - 15); // Posiziona a sinistra del pannello
 
         // Imposta lo stile del pulsante
-        toggleButton.setStyle("-fx-background-color: #ECD8C6; -fx-border-color: black; -fx-border-radius: 5;");
+        toggleButton.setStyle("-fx-background-color: #BEA084; -fx-border-color: black; -fx-border-radius: 5; -fx-text-fill: white;");
 
         getChildren().addAll(background, scoreBox, toggleButton);
 
