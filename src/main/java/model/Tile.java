@@ -11,10 +11,9 @@ public class Tile extends Rectangle {
     private final int x, y;
 
     // Colori per le celle
-    private static final Color LIGHT_COLOR = Color.valueOf("#FFFACD");
-    private static final Color DARK_COLOR = Color.valueOf("#8B4513");
-    private static final Color HIGHLIGHT_COLOR = Color.valueOf("#55FF55");
-    private static final Color HIGHLIGHT_BORDER_COLOR = Color.valueOf("#00AA00");
+    private static final Color LIGHT_COLOR = Color.valueOf("#C1A89F");
+    private static final Color DARK_COLOR = Color.valueOf("#5D5364");
+    private static final Color HIGHLIGHT_COLOR = Color.valueOf("#BADA55");
 
     public Tile(boolean isLight, int x, int y) {
         this.isLight = isLight;
@@ -48,7 +47,6 @@ public class Tile extends Rectangle {
         if (!isLight) { // Evidenziamo solo le celle scure (quelle valide per la dama)
             isHighlighted = true;
             setFill(HIGHLIGHT_COLOR);
-            setStroke(HIGHLIGHT_BORDER_COLOR);
             setStrokeWidth(2.0);
         }
     }
