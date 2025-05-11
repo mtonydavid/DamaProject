@@ -41,14 +41,6 @@ public class Tile extends Rectangle {
         this.piece = piece;
     }
 
-    public int getX() {
-        return x;
-    }
-
-    public int getY() {
-        return y;
-    }
-
     /**
      * Evidenzia la cella come mossa possibile.
      */
