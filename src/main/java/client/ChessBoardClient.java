@@ -10,6 +10,7 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.Pane;
 import javafx.stage.Stage;
 import model.*;
+import javafx.scene.input.MouseEvent;
 
 import java.io.*;
 import java.net.Socket;
@@ -159,8 +160,8 @@ public class ChessBoardClient extends Application {
     private Piece makePiece(PieceType pieceType, int x, int y) {
         Piece piece = new Piece(pieceType, x, y);
 
-        piece.setOnMousePressed(e -> {
-            // Se è il turno del giocatore, seleziona la pedina e mostra le mosse disponibili
+
+        piece.addEventHandler(MouseEvent.MOUSE_PRESSED, e -> {
             if (("local".equals(mode) &&
                     ((isItMyTurn && (pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP)) ||
                             (!isItMyTurn && (pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP)))) ||
@@ -168,13 +169,8 @@ public class ChessBoardClient extends Application {
                             ((player == 1 && (pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP)) ||
                                     (player == 2 && (pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP))))) {
 
-                // Rimuovi l'evidenziazione precedente se esiste
                 removeAllHighlights();
-
-                // Seleziona la nuova pedina
                 selectedPiece = piece;
-
-                // Mostra le mosse disponibili
                 highlightPossibleMoves(piece);
             }
         });
