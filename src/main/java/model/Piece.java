@@ -46,14 +46,19 @@ import javafx.scene.shape.Ellipse;
             getChildren().addAll(ellipseBackground, ellipse);
 
             setOnMousePressed(e -> {
+                // Salva la posizione del mouse all'inizio del trascinamento
                 mouseX = e.getSceneX();
                 mouseY = e.getSceneY();
             });
 
             setOnMouseDragged(e -> {
-                relocate(e.getSceneX() - mouseX + oldX, e.getSceneY() - mouseY + oldY);
-            });
+                // Calcola la posizione corretta con l'offset del mouse
+                double newX = e.getSceneX() - mouseX + oldX;
+                double newY = e.getSceneY() - mouseY + oldY;
 
+                // Sposta la pedina alla nuova posizione
+                relocate(newX, newY);
+            });
         }
 
         public double getOldX() {

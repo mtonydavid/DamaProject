@@ -180,8 +180,13 @@ public class ChessBoardClient extends Application {
         });
 
         piece.setOnMouseReleased(e -> {
-            int newX = Coder.pixelToBoard(piece.getLayoutX());
-            int newY = Coder.pixelToBoard(piece.getLayoutY());
+            // Calcola le coordinate di board arrotondando alla casella più vicina
+            int newX = (int) Math.round(piece.getLayoutX() / TILE_SIZE);
+            int newY = (int) Math.round(piece.getLayoutY() / TILE_SIZE);
+
+            // Assicurati che le coordinate siano all'interno dei limiti della scacchiera
+            newX = Math.max(0, Math.min(WIDTH - 1, newX));
+            newY = Math.max(0, Math.min(HEIGHT - 1, newY));
 
             if ("local".equals(mode)) {
                 // In modalità locale, gestiamo le mosse direttamente
@@ -211,10 +216,7 @@ public class ChessBoardClient extends Application {
         }
 
         // Verifica se la cella di destinazione è evidenziata
-        int boardX = Coder.pixelToBoard(piece.getLayoutX());
-        int boardY = Coder.pixelToBoard(piece.getLayoutY());
-
-        if (!isValidCoordinate(boardX, boardY) || !board[boardX][boardY].isHighlighted()) {
+        if (!isValidCoordinate(newX, newY) || !board[newX][newY].isHighlighted()) {
             piece.abortMove();
             return;
         }
@@ -294,7 +296,9 @@ public class ChessBoardClient extends Application {
         }
 
         try {
-            bufferedWriter.write(Coder.pixelToBoard(piece.getOldX()) + " " + Coder.pixelToBoard(piece.getOldY()) + " " + newX + " " + newY);
+            int oldBoardX = Coder.pixelToBoard(piece.getOldX());
+            int oldBoardY = Coder.pixelToBoard(piece.getOldY());
+            bufferedWriter.write(oldBoardX + " " + oldBoardY + " " + newX + " " + newY);
             bufferedWriter.newLine();
             bufferedWriter.flush();
         } catch (IOException e) {
