@@ -40,6 +40,9 @@ public class ChessBoardClient extends Application {
     private float time = 0;
     private final Timer timer = new Timer();
 
+    // Reference to the game stage
+    private Stage gameStage;
+
     // Contatori per tenere traccia delle pedine
     private int grayLivePieces = 12;
     private int whiteLivePieces = 12;
@@ -67,6 +70,8 @@ public class ChessBoardClient extends Application {
 
     @Override
     public void start(Stage stage) throws IOException, InterruptedException {
+        this.gameStage = stage;
+
         if (mode == null || mode.isEmpty()) {
             // Se il modo non è stato impostato, ma abbiamo args, usa quello
             if (getParameters() != null && !getParameters().getRaw().isEmpty()) {
@@ -372,11 +377,27 @@ public class ChessBoardClient extends Application {
         // Se un giocatore non ha più pezzi, l'altro ha vinto
         if (!grayExists) {
             winner = 2;
-            Platform.runLater(() -> timer.set("WHITE WON!"));
+            showVictoryScreen("WHITE WON!");
         } else if (!whiteExists) {
             winner = 1;
-            Platform.runLater(() -> timer.set("GRAY WON!"));
+            showVictoryScreen("GRAY WON!");
         }
+    }
+
+    private void showVictoryScreen(String winnerText) {
+        // Aggiunto metodo per visualizzare la schermata di vittoria
+        int gameTimeInSeconds = (int)time;
+        VictoryScreen victoryScreen = new VictoryScreen(
+                winnerText,
+                gameTimeInSeconds,
+                grayLivePieces,
+                whiteLivePieces,
+                grayKilledPieces,
+                whiteKilledPieces,
+                mode
+        );
+
+        Platform.runLater(victoryScreen::show);
     }
 
     public void countTime() {
@@ -384,9 +405,23 @@ public class ChessBoardClient extends Application {
         executor.scheduleAtFixedRate(() -> {
             if (winner != 0) {
                 if ("local".equals(mode)) {
-                    Platform.runLater(() -> timer.set((winner == 1) ? "GRAY WON!" : "WHITE WON!"));
+                    String winnerText = (winner == 1) ? "GRAY WON!" : "WHITE WON!";
+                    Platform.runLater(() -> timer.set(winnerText));
+
+                    // Mostra la schermata di vittoria dopo aver determinato il vincitore
+                    Platform.runLater(() -> showVictoryScreen(winnerText));
                 } else {
-                    Platform.runLater(() -> timer.set((winner == player) ? "YOU WON!" : "YOU LOST!"));
+                    String winnerText = (winner == player) ? "YOU WON!" : "YOU LOST!";
+                    Platform.runLater(() -> timer.set(winnerText));
+
+                    // Versione tradotta per la modalità online
+                    Platform.runLater(() -> {
+                        if (winner == 1) {
+                            showVictoryScreen("GRAY WON!");
+                        } else {
+                            showVictoryScreen("WHITE WON!");
+                        }
+                    });
                 }
                 executor.shutdown();
             }
@@ -432,8 +467,14 @@ public class ChessBoardClient extends Application {
 
                                 makeMove(piece, newX, newY, new MoveResult(MoveType.KILL, killedPiece));
                             }
-                            case "END1" -> winner = 1;
-                            case "END2" -> winner = 2;
+                            case "END1" -> {
+                                winner = 1;
+                                showVictoryScreen("GRAY WON!");
+                            }
+                            case "END2" -> {
+                                winner = 2;
+                                showVictoryScreen("WHITE WON!");
+                            }
                         }
                     }
                 } catch (IOException e) {
