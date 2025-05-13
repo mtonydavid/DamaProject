@@ -112,7 +112,7 @@ public class ChessBoardClient extends Application {
         }
 
         Scene scene = new Scene(createContent());
-        stage.setTitle("Dama - Partita in corso");
+        stage.setTitle("Checkers Game");
         stage.setScene(scene);
         stage.show();
     }
@@ -146,9 +146,9 @@ public class ChessBoardClient extends Application {
         colorLabel.relocate(0, 0);
 
         if ("local".equals(mode)) {
-            colorLabel.setText("Modalità Locale - Turno: GRAY");
+            colorLabel.setText("Local Mode - Turn: GRAY");
         } else {
-            colorLabel.setText("Tu giochi" + ((player == 1) ? " GRAY" : " WHITE"));
+            colorLabel.setText("You are" + ((player == 1) ? " GRAY" : " WHITE"));
         }
 
         // Aggiorna il display del punteggio iniziale
@@ -223,7 +223,7 @@ public class ChessBoardClient extends Application {
         // Cambio turno solo se la mossa è valida
         if (result.getMoveType() != MoveType.NONE) {
             isItMyTurn = !isItMyTurn;
-            colorLabel.setText("Modalità Locale - Turno: " + (isItMyTurn ? "GRAY" : "WHITE"));
+            colorLabel.setText("Local Mode - Turn : " + (isItMyTurn ? "GRAY" : "WHITE"));
         }
     }
 
@@ -372,10 +372,10 @@ public class ChessBoardClient extends Application {
         // Se un giocatore non ha più pezzi, l'altro ha vinto
         if (!grayExists) {
             winner = 2;
-            Platform.runLater(() -> timer.set("WHITE ha vinto!"));
+            Platform.runLater(() -> timer.set("WHITE WON!"));
         } else if (!whiteExists) {
             winner = 1;
-            Platform.runLater(() -> timer.set("GRAY ha vinto!"));
+            Platform.runLater(() -> timer.set("GRAY WON!"));
         }
     }
 
@@ -384,9 +384,9 @@ public class ChessBoardClient extends Application {
         executor.scheduleAtFixedRate(() -> {
             if (winner != 0) {
                 if ("local".equals(mode)) {
-                    Platform.runLater(() -> timer.set((winner == 1) ? "GRAY ha vinto!" : "WHITE ha vinto!"));
+                    Platform.runLater(() -> timer.set((winner == 1) ? "GRAY WON!" : "WHITE WON!"));
                 } else {
-                    Platform.runLater(() -> timer.set((winner == player) ? "Hai vinto!" : "Hai perso!"));
+                    Platform.runLater(() -> timer.set((winner == player) ? "YOU WON!" : "YOU LOST!"));
                 }
                 executor.shutdown();
             }
@@ -394,8 +394,8 @@ public class ChessBoardClient extends Application {
             if (isItMyTurn) {
                 time += 0.1;
                 if ("local".equals(mode)) {
-                    String currentPlayer = isItMyTurn ? "GRAY" : "WHITE";
-                    Platform.runLater(() -> timer.set("Tempo " + currentPlayer + ": " + (int)time + "s."));
+                    String currentPlayer = isItMyTurn ? "GRAY" : "WHITE" ;
+                    Platform.runLater(() -> timer.set("Time " + currentPlayer + ": " + (int)time + "s."));
                 } else {
                     Platform.runLater(() -> timer.set("Timer: " + (int)time + "s."));
                 }
