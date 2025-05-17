@@ -25,6 +25,9 @@ public class ClientHandler implements Runnable {
     private CheckersAI ai;
     private boolean isCpuMode = false;
 
+    // Aggiungiamo un parametro per il ritardo della CPU (in millisecondi)
+    private final long cpuMoveDelay = 1000; // 1 secondo di ritardo
+
     public ClientHandler(Socket socket1, Socket socket2) throws IOException {
         try {
             this.socket1 = socket1;
@@ -152,6 +155,16 @@ public class ClientHandler implements Runnable {
             if (fromBufferedReader != null) {
                 messageFrom = fromBufferedReader.readLine();
             } else {
+                // Se siamo in modalità CPU, aggiungiamo un ritardo prima di eseguire la mossa
+                try {
+                    System.out.println("CPU sta pensando...");
+                    Thread.sleep(cpuMoveDelay);
+                    System.out.println("CPU ha completato il pensiero e sta eseguendo la mossa");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    System.out.println("La pausa della CPU è stata interrotta");
+                }
+
                 // Use AI to generate a move instead of random moves
                 messageFrom = ai.generateBestMove();
             }
