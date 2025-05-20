@@ -54,6 +54,8 @@ public class ChessBoardClient extends Application {
 
     private Piece selectedPiece = null;
 
+    private GameChat gameChat;
+
     public static void main(String[] args) {
         if (args.length > 0) {
             // Se ci sono argomenti, avvia direttamente la partita
@@ -154,6 +156,13 @@ public class ChessBoardClient extends Application {
             colorLabel.setText("Local Mode - Turn: GRAY");
         } else {
             colorLabel.setText("You are" + ((player == 1) ? " GRAY" : " WHITE"));
+
+            // Aggiungi la chat solo per modalità online
+            if (!mode.equals("local")) {
+                String playerName = "Giocatore " + player;
+                gameChat = new GameChat(bufferedWriter, playerName);
+                root.getChildren().add(gameChat);
+            }
         }
 
         // Aggiorna il display del punteggio iniziale
@@ -442,11 +451,31 @@ public class ChessBoardClient extends Application {
         new Thread(() -> {
             String message;
 
+            // Crea la chat se non esiste già
+            if (gameChat == null) {
+                String playerName = "Giocatore " + player;
+                gameChat = new GameChat(bufferedWriter, playerName);
+                Platform.runLater(() -> {
+                    // Aggiungi la chat al layout principale
+                    ((Pane) pieceGroup.getParent()).getChildren().add(gameChat);
+                });
+            }
+
             while (socket != null && socket.isConnected() && winner == 0) {
                 try {
                     message = bufferedReader.readLine();
                     System.out.println(message);
-                    if (message.startsWith("PING")) {
+
+                    // Controlla se è un messaggio di chat
+                    if (message.startsWith("CHAT ")) {
+                        String[] parts = message.split(" ", 3);
+                        if (parts.length >= 3) {
+                            String sender = parts[1];
+                            String chatMessage = parts[2];
+                            gameChat.receiveMessage(sender, chatMessage);
+                        }
+                        continue; // Passa al prossimo messaggio
+                    } else if (message.startsWith("PING")) {
                         isItMyTurn = true;
                     } else {
                         String[] partsOfMessage = message.split(" ");

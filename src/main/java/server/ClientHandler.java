@@ -169,6 +169,16 @@ public class ClientHandler implements Runnable {
                 messageFrom = ai.generateBestMove();
             }
             System.out.println(messageFrom);
+            // Verifica se è un messaggio di chat
+            if (messageFrom.startsWith("CHAT ")) {
+                try {
+                    // Inoltra il messaggio di chat all'altro giocatore
+                    forwardChatMessage(messageFrom, fromBufferedWriter);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                return false; // Non è una mossa, quindi ritorna false
+            }
 
             int fromX = Integer.parseInt(messageFrom.split(" ")[0]);
             int fromY = Integer.parseInt(messageFrom.split(" ")[1]);
@@ -261,6 +271,23 @@ public class ClientHandler implements Runnable {
                     piece.promote();
                 }
             }
+        }
+    }
+    // Aggiungi questo metodo alla classe ClientHandler in src/main/java/server/ClientHandler.java
+    private void forwardChatMessage(String message, BufferedWriter fromWriter) throws IOException {
+        // Determina quale bufferedWriter è quello da cui arriva il messaggio
+        // e invia il messaggio all'altro client
+
+        if (fromWriter == bufferedWriter1) {
+            // Invia il messaggio al client 2
+            bufferedWriter2.write(message);
+            bufferedWriter2.newLine();
+            bufferedWriter2.flush();
+        } else {
+            // Invia il messaggio al client 1
+            bufferedWriter1.write(message);
+            bufferedWriter1.newLine();
+            bufferedWriter1.flush();
         }
     }
 
