@@ -1,12 +1,13 @@
 package server;
 
-
 import client.ChessBoardClient;
 import common.Coder;
 import model.*;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.List;
+import java.util.ArrayList;
 
 public class ClientHandler implements Runnable {
     private final Tile[][] board = new Tile[ChessBoardClient.WIDTH][ChessBoardClient.HEIGHT];
@@ -27,6 +28,14 @@ public class ClientHandler implements Runnable {
 
     // Aggiungiamo un parametro per il ritardo della CPU (in millisecondi)
     private final long cpuMoveDelay = 1000; // 1 secondo di ritardo
+
+    // NEW: Variables for advanced rules
+    private boolean mustCapture = false;
+    private boolean isInMultiJump = false;
+    private int currentPlayer = -1; // -1 = GRAY turn, 1 = WHITE turn
+    private Piece multiJumpPiece = null;
+    private int movesWithoutCapture = 0;
+    private final int MAX_MOVES_WITHOUT_CAPTURE = 40;
 
     public ClientHandler(Socket socket1, Socket socket2) throws IOException {
         try {
@@ -67,13 +76,37 @@ public class ClientHandler implements Runnable {
         }
 
         int i = 1;
-        while (socket1.isConnected() && (socket2 == null || socket2.isConnected()) && whitePieces * grayPieces > 0) {
+        while (socket1.isConnected() && (socket2 == null || socket2.isConnected()) && whitePieces * grayPieces > 0 && movesWithoutCapture < MAX_MOVES_WITHOUT_CAPTURE) {
             try {
-                if (processMove(i % 2 * 2 - 1)) {
-                    i++;
+                currentPlayer = i % 2 * 2 - 1; // -1 for GRAY, 1 for WHITE
+                updateMustCapture();
+
+                if (processMove(currentPlayer)) {
+                    if (!isInMultiJump) {
+                        i++; // Solo se non siamo in multi-jump
+                    }
                 }
             } catch (IOException e) {
                 closeEverything();
+                e.printStackTrace();
+            }
+        }
+
+        // Check for draw condition
+        if (movesWithoutCapture >= MAX_MOVES_WITHOUT_CAPTURE) {
+            try {
+                String drawMessage = "1 2 3 4 DRAW";
+                if (bufferedWriter1 != null) {
+                    bufferedWriter1.write(drawMessage);
+                    bufferedWriter1.newLine();
+                    bufferedWriter1.flush();
+                }
+                if (bufferedWriter2 != null) {
+                    bufferedWriter2.write(drawMessage);
+                    bufferedWriter2.newLine();
+                    bufferedWriter2.flush();
+                }
+            } catch (IOException e) {
                 e.printStackTrace();
             }
         }
@@ -131,6 +164,87 @@ public class ClientHandler implements Runnable {
         return new MoveResult(MoveType.NONE);
     }
 
+    /**
+     * Trova tutte le catture possibili per il giocatore corrente
+     */
+    private List<MoveResult> findAllPossibleCaptures(int moveDir) {
+        List<MoveResult> allCaptures = new ArrayList<>();
+
+        for (int y = 0; y < ChessBoardClient.HEIGHT; y++) {
+            for (int x = 0; x < ChessBoardClient.WIDTH; x++) {
+                if (board[x][y].hasPiece()) {
+                    Piece piece = board[x][y].getPiece();
+                    if (Math.signum(piece.getPieceType().moveDir) == Math.signum(moveDir)) {
+                        allCaptures.addAll(findPossibleCaptures(piece));
+                    }
+                }
+            }
+        }
+
+        return allCaptures;
+    }
+
+    /**
+     * Trova tutte le catture possibili per una pedina specifica
+     */
+    private List<MoveResult> findPossibleCaptures(Piece piece) {
+        List<MoveResult> captures = new ArrayList<>();
+        int x = Coder.pixelToBoard(piece.getOldX());
+        int y = Coder.pixelToBoard(piece.getOldY());
+
+        // Direzioni da controllare in base al tipo di pedina
+        int[][] directions;
+        if (piece.getPieceType() == PieceType.GRAY_SUP || piece.getPieceType() == PieceType.WHITE_SUP) {
+            // Dame: tutte le direzioni
+            directions = new int[][]{{-1, -1}, {-1, 1}, {1, -1}, {1, 1}};
+        } else {
+            // Pedine normali: solo avanti
+            int moveDir = piece.getPieceType().moveDir;
+            directions = new int[][]{{-1, moveDir}, {1, moveDir}};
+        }
+
+        for (int[] dir : directions) {
+            int middleX = x + dir[0];
+            int middleY = y + dir[1];
+            int destX = x + dir[0] * 2;
+            int destY = y + dir[1] * 2;
+
+            if (destX >= 0 && destX < ChessBoardClient.WIDTH && destY >= 0 && destY < ChessBoardClient.HEIGHT &&
+                    middleX >= 0 && middleX < ChessBoardClient.WIDTH && middleY >= 0 && middleY < ChessBoardClient.HEIGHT &&
+                    !board[destX][destY].hasPiece() && board[middleX][middleY].hasPiece()) {
+
+                Piece middlePiece = board[middleX][middleY].getPiece();
+                if (isOpponentPiece(piece, middlePiece)) {
+                    captures.add(new MoveResult(MoveType.KILL, middlePiece));
+                }
+            }
+        }
+
+        return captures;
+    }
+
+    /**
+     * Verifica se una pedina è avversaria
+     */
+    private boolean isOpponentPiece(Piece piece, Piece otherPiece) {
+        return Math.signum(piece.getPieceType().moveDir) != Math.signum(otherPiece.getPieceType().moveDir);
+    }
+
+    /**
+     * Aggiorna la variabile mustCapture
+     */
+    private void updateMustCapture() {
+        if (isInMultiJump && multiJumpPiece != null) {
+            // Durante multi-jump, controlla solo la pedina che sta saltando
+            List<MoveResult> captures = findPossibleCaptures(multiJumpPiece);
+            mustCapture = !captures.isEmpty();
+        } else {
+            // Normale controllo per tutte le pedine del giocatore corrente
+            List<MoveResult> possibleCaptures = findAllPossibleCaptures(currentPlayer);
+            mustCapture = !possibleCaptures.isEmpty();
+        }
+    }
+
     public boolean processMove(int moveDir) throws IOException {
         try {
             BufferedReader fromBufferedReader;
@@ -169,6 +283,7 @@ public class ClientHandler implements Runnable {
                 messageFrom = ai.generateBestMove();
             }
             System.out.println(messageFrom);
+
             // Verifica se è un messaggio di chat
             if (messageFrom.startsWith("CHAT ")) {
                 try {
@@ -189,19 +304,65 @@ public class ClientHandler implements Runnable {
                 return false;
             }
 
-            MoveResult moveResult = tryMove(board[fromX][fromY].getPiece(), newX, newY);
-            if (Math.signum(board[fromX][fromY].getPiece().getPieceType().moveDir) == Math.signum(moveDir)) {
+            Piece piece = board[fromX][fromY].getPiece();
+
+            // Verifica se è il turno corretto
+            if (Math.signum(piece.getPieceType().moveDir) != Math.signum(moveDir)) {
                 if (fromBufferedReader != null) {
-                    fromBufferedWriter.write(Coder.encode(board[fromX][fromY].getPiece(), newX, newY, new MoveResult(MoveType.NONE)));
+                    fromBufferedWriter.write(Coder.encode(piece, newX, newY, new MoveResult(MoveType.NONE)));
                     fromBufferedWriter.newLine();
                     fromBufferedWriter.flush();
                 }
                 return false;
             }
 
-            String toMessage = Coder.encode(board[fromX][fromY].getPiece(), newX, newY, moveResult);
-            makeMove(board[fromX][fromY].getPiece(), newX, newY, moveResult);
+            // Verifica se è in multi-jump e la pedina è quella corretta
+            if (isInMultiJump && piece != multiJumpPiece) {
+                if (fromBufferedReader != null) {
+                    fromBufferedWriter.write(Coder.encode(piece, newX, newY, new MoveResult(MoveType.NONE)));
+                    fromBufferedWriter.newLine();
+                    fromBufferedWriter.flush();
+                }
+                return false;
+            }
 
+            MoveResult moveResult = tryMove(piece, newX, newY);
+
+            // Verifica mangiata obbligatoria
+            if (mustCapture && moveResult.getMoveType() != MoveType.KILL) {
+                if (fromBufferedReader != null) {
+                    fromBufferedWriter.write(Coder.encode(piece, newX, newY, new MoveResult(MoveType.NONE)));
+                    fromBufferedWriter.newLine();
+                    fromBufferedWriter.flush();
+                }
+                return false;
+            }
+
+            String toMessage = Coder.encode(piece, newX, newY, moveResult);
+            makeMove(piece, newX, newY, moveResult);
+
+            // Gestisci multi-jump
+            if (moveResult.getMoveType() == MoveType.KILL) {
+                movesWithoutCapture = 0; // Reset contatore
+
+                // Controlla se ci sono altre catture possibili
+                List<MoveResult> additionalCaptures = findPossibleCaptures(piece);
+                if (!additionalCaptures.isEmpty()) {
+                    isInMultiJump = true;
+                    multiJumpPiece = piece;
+                    // Non inviare il messaggio ancora, continua il multi-jump
+                    return false; // Non cambiare turno
+                } else {
+                    isInMultiJump = false;
+                    multiJumpPiece = null;
+                }
+            } else {
+                movesWithoutCapture++;
+                isInMultiJump = false;
+                multiJumpPiece = null;
+            }
+
+            // Invia il messaggio ai client
             if (toBufferedWriter != null) {
                 toBufferedWriter.write(toMessage);
                 toBufferedWriter.newLine();
@@ -214,9 +375,12 @@ public class ClientHandler implements Runnable {
                 fromBufferedWriter.flush();
             }
 
-            if (whitePieces == 0 || grayPieces == 0) {
+            // Controlla condizioni di fine partita
+            if (whitePieces == 0 || grayPieces == 0 || movesWithoutCapture >= MAX_MOVES_WITHOUT_CAPTURE) {
                 String endOfGameMessage;
-                if (whitePieces == 0) {
+                if (movesWithoutCapture >= MAX_MOVES_WITHOUT_CAPTURE) {
+                    endOfGameMessage = "1 2 3 4 DRAW";
+                } else if (whitePieces == 0) {
                     endOfGameMessage = "1 2 3 4 END1";
                 } else {
                     endOfGameMessage = "1 2 3 4 END2";
@@ -273,16 +437,18 @@ public class ClientHandler implements Runnable {
             }
         }
     }
-    // Aggiungi questo metodo alla classe ClientHandler in src/main/java/server/ClientHandler.java
+
     private void forwardChatMessage(String message, BufferedWriter fromWriter) throws IOException {
         // Determina quale bufferedWriter è quello da cui arriva il messaggio
         // e invia il messaggio all'altro client
 
         if (fromWriter == bufferedWriter1) {
             // Invia il messaggio al client 2
-            bufferedWriter2.write(message);
-            bufferedWriter2.newLine();
-            bufferedWriter2.flush();
+            if (bufferedWriter2 != null) {
+                bufferedWriter2.write(message);
+                bufferedWriter2.newLine();
+                bufferedWriter2.flush();
+            }
         } else {
             // Invia il messaggio al client 1
             bufferedWriter1.write(message);

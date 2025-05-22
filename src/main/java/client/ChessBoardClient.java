@@ -14,6 +14,8 @@ import javafx.scene.input.MouseEvent;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -57,7 +59,17 @@ public class ChessBoardClient extends Application {
 
     private boolean isItMyTurn = false;
 
+    // Add separate variable for local mode turn management
+    private boolean isWhiteTurn = true; // WHITE always starts first in local mode
+
     private Piece selectedPiece = null;
+
+    // NEW: Variables for advanced rules
+    private boolean mustCapture = false; // Mangiata obbligatoria
+    private boolean isInMultiJump = false; // Multi-jump in corso
+    private Piece multiJumpPiece = null; // Pedina che sta facendo multi-jump
+    private int movesWithoutCapture = 0; // Contatore per regola dei 40 turni
+    private final int MAX_MOVES_WITHOUT_CAPTURE = 40; // Limite per patta
 
     public static void main(String[] args) {
         if (args.length > 0) {
@@ -116,9 +128,9 @@ public class ChessBoardClient extends Application {
             listenToServer();
         } else {
             // Modalità locale, senza connessione
-            player = 1; // Il giocatore 1 inizia sempre
-            countTimeLocal(); // Use separate method for local mode
-            isItMyTurn = true; // Il primo giocatore inizia (GRAY)
+            player = 1; // Keep this for compatibility, but use isWhiteTurn for actual turn management
+            countTimeLocal();
+            isWhiteTurn = true; // WHITE starts first in local mode
         }
 
         Scene scene = new Scene(createContent());
@@ -163,7 +175,7 @@ public class ChessBoardClient extends Application {
         colorLabel.relocate(0, 0);
 
         if ("local".equals(mode)) {
-            colorLabel.setText("Local Mode - Turn: GRAY");
+            updateTurnLabel();
         } else {
             colorLabel.setText("You are" + ((player == 1) ? " GRAY" : " WHITE"));
         }
@@ -178,16 +190,29 @@ public class ChessBoardClient extends Application {
         Piece piece = new Piece(pieceType, x, y);
 
         piece.addEventHandler(MouseEvent.MOUSE_PRESSED, e -> {
-            if (("local".equals(mode) &&
-                    ((isItMyTurn && (pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP)) ||
-                            (!isItMyTurn && (pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP)))) ||
-                    ((!mode.equals("local")) && isItMyTurn &&
-                            ((player == 1 && (pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP)) ||
-                                    (player == 2 && (pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP))))) {
+            if ("local".equals(mode)) {
+                // For local mode, use isWhiteTurn variable
+                boolean isWhitePiece = pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP;
 
-                removeAllHighlights();
-                selectedPiece = piece;
-                highlightPossibleMoves(piece);
+                // Se siamo in multi-jump, solo quella pedina può muoversi
+                if (isInMultiJump && piece != multiJumpPiece) {
+                    return;
+                }
+
+                if (isWhiteTurn == isWhitePiece) {
+                    removeAllHighlights();
+                    selectedPiece = piece;
+                    highlightPossibleMoves(piece);
+                }
+            } else {
+                // For online mode, keep original logic
+                if (isItMyTurn &&
+                        ((player == 1 && (pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP)) ||
+                                (player == 2 && (pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP)))) {
+                    removeAllHighlights();
+                    selectedPiece = piece;
+                    highlightPossibleMoves(piece);
+                }
             }
         });
 
@@ -216,14 +241,18 @@ public class ChessBoardClient extends Application {
         return piece;
     }
 
-    // Modifica il metodo handleLocalMove per tenere conto dell'evidenziazione
     private void handleLocalMove(Piece piece, int newX, int newY) {
-        // Verifica se è il turno del giocatore corretto
-        boolean isGrayTurn = isItMyTurn;
-        boolean isGrayPiece = piece.getPieceType() == PieceType.GRAY || piece.getPieceType() == PieceType.GRAY_SUP;
+        // Check if it's the correct player's turn
+        boolean isWhitePiece = piece.getPieceType() == PieceType.WHITE || piece.getPieceType() == PieceType.WHITE_SUP;
 
-        if (isGrayTurn != isGrayPiece) {
-            // Non è il turno di questo pezzo
+        if (isWhiteTurn != isWhitePiece) {
+            // Wrong player trying to move
+            piece.abortMove();
+            return;
+        }
+
+        // Se siamo in multi-jump, solo quella pedina può muoversi
+        if (isInMultiJump && piece != multiJumpPiece) {
             piece.abortMove();
             return;
         }
@@ -235,12 +264,161 @@ public class ChessBoardClient extends Application {
         }
 
         MoveResult result = tryMove(piece, newX, newY);
+
+        // Verifica mangiata obbligatoria
+        if (mustCapture && result.getMoveType() != MoveType.KILL) {
+            piece.abortMove();
+            return;
+        }
+
         makeMove(piece, newX, newY, result);
 
-        // Cambio turno solo se la mossa è valida
+        // Gestisci il cambio turno e multi-jump
         if (result.getMoveType() != MoveType.NONE) {
-            isItMyTurn = !isItMyTurn;
-            colorLabel.setText("Local Mode - Turn: " + (isItMyTurn ? "GRAY" : "WHITE"));
+            if (result.getMoveType() == MoveType.KILL) {
+                // Reset contatore mosse senza cattura
+                movesWithoutCapture = 0;
+
+                // Controlla se ci sono altre catture possibili con la stessa pedina
+                List<MoveResult> possibleCaptures = findPossibleCaptures(piece);
+                if (!possibleCaptures.isEmpty()) {
+                    // Multi-jump: la stessa pedina deve continuare a catturare
+                    isInMultiJump = true;
+                    multiJumpPiece = piece;
+                    updateTurnLabel(); // Aggiorna la label per mostrare il multi-jump
+                    return; // Non cambiare turno
+                } else {
+                    // Nessuna cattura aggiuntiva possibile
+                    isInMultiJump = false;
+                    multiJumpPiece = null;
+                }
+            } else {
+                // Mossa normale
+                movesWithoutCapture++;
+                isInMultiJump = false;
+                multiJumpPiece = null;
+            }
+
+            // Cambia turno
+            isWhiteTurn = !isWhiteTurn;
+
+            // Controlla la regola dei 40 turni
+            if (movesWithoutCapture >= MAX_MOVES_WITHOUT_CAPTURE) {
+                winner = 0; // Patta
+                showVictoryScreen("DRAW - 40 moves without capture!");
+                return;
+            }
+
+            // Aggiorna mustCapture per il prossimo turno
+            updateMustCapture();
+            updateTurnLabel();
+        }
+    }
+
+    /**
+     * Trova tutte le catture possibili per una pedina specifica
+     */
+    private List<MoveResult> findPossibleCaptures(Piece piece) {
+        List<MoveResult> captures = new ArrayList<>();
+        int x = Coder.pixelToBoard(piece.getOldX());
+        int y = Coder.pixelToBoard(piece.getOldY());
+
+        // Direzioni da controllare in base al tipo di pedina
+        int[][] directions;
+        if (piece.getPieceType() == PieceType.GRAY_SUP || piece.getPieceType() == PieceType.WHITE_SUP) {
+            // Dame: tutte le direzioni
+            directions = new int[][]{{-1, -1}, {-1, 1}, {1, -1}, {1, 1}};
+        } else {
+            // Pedine normali: solo avanti
+            int moveDir = piece.getPieceType().moveDir;
+            directions = new int[][]{{-1, moveDir}, {1, moveDir}};
+        }
+
+        for (int[] dir : directions) {
+            int middleX = x + dir[0];
+            int middleY = y + dir[1];
+            int destX = x + dir[0] * 2;
+            int destY = y + dir[1] * 2;
+
+            if (isValidCoordinate(destX, destY) && isValidCoordinate(middleX, middleY) &&
+                    !board[destX][destY].hasPiece() && board[middleX][middleY].hasPiece()) {
+
+                Piece middlePiece = board[middleX][middleY].getPiece();
+                if (isOpponentPiece(piece, middlePiece)) {
+                    captures.add(new MoveResult(MoveType.KILL, middlePiece));
+                }
+            }
+        }
+
+        return captures;
+    }
+
+    /**
+     * Trova tutte le catture possibili per il giocatore corrente
+     */
+    private List<MoveResult> findAllPossibleCaptures() {
+        List<MoveResult> allCaptures = new ArrayList<>();
+
+        for (int y = 0; y < HEIGHT; y++) {
+            for (int x = 0; x < WIDTH; x++) {
+                if (board[x][y].hasPiece()) {
+                    Piece piece = board[x][y].getPiece();
+                    boolean isCurrentPlayerPiece = false;
+
+                    if ("local".equals(mode)) {
+                        boolean isWhitePiece = piece.getPieceType() == PieceType.WHITE || piece.getPieceType() == PieceType.WHITE_SUP;
+                        isCurrentPlayerPiece = (isWhiteTurn == isWhitePiece);
+                    } else {
+                        isCurrentPlayerPiece = ((player == 1 && (piece.getPieceType() == PieceType.GRAY || piece.getPieceType() == PieceType.GRAY_SUP)) ||
+                                (player == 2 && (piece.getPieceType() == PieceType.WHITE || piece.getPieceType() == PieceType.WHITE_SUP)));
+                    }
+
+                    if (isCurrentPlayerPiece) {
+                        allCaptures.addAll(findPossibleCaptures(piece));
+                    }
+                }
+            }
+        }
+
+        return allCaptures;
+    }
+
+    /**
+     * Aggiorna la variabile mustCapture in base alle catture disponibili
+     */
+    private void updateMustCapture() {
+        List<MoveResult> possibleCaptures = findAllPossibleCaptures();
+        mustCapture = !possibleCaptures.isEmpty();
+    }
+
+    /**
+     * Verifica se una pedina è avversaria
+     */
+    private boolean isOpponentPiece(Piece piece, Piece otherPiece) {
+        PieceType pieceType = piece.getPieceType();
+        PieceType otherType = otherPiece.getPieceType();
+
+        boolean isGrayPiece = (pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP);
+        boolean isOtherGray = (otherType == PieceType.GRAY || otherType == PieceType.GRAY_SUP);
+
+        return isGrayPiece != isOtherGray;
+    }
+
+    /**
+     * Aggiorna la label del turno con informazioni aggiuntive
+     */
+    private void updateTurnLabel() {
+        if ("local".equals(mode)) {
+            String currentPlayer = isWhiteTurn ? "WHITE" : "GRAY";
+            String extra = "";
+
+            if (isInMultiJump) {
+                extra = " (Multi-Jump!)";
+            } else if (mustCapture) {
+                extra = " (Must Capture!)";
+            }
+
+            colorLabel.setText("Local Mode - Turn: " + currentPlayer + extra + " | Moves without capture: " + movesWithoutCapture);
         }
     }
 
@@ -294,7 +472,6 @@ public class ChessBoardClient extends Application {
         return new MoveResult(MoveType.NONE);
     }
 
-    // Modifica il metodo requestMove per tenere conto dell'evidenziazione
     public void requestMove(Piece piece, int newX, int newY) {
         if (!isItMyTurn) {
             makeMove(piece, newX, newY, new MoveResult(MoveType.NONE));
@@ -400,7 +577,7 @@ public class ChessBoardClient extends Application {
         int gameTimeInSeconds;
         if ("local".equals(mode)) {
             // In local mode, show the time of the winning player
-            gameTimeInSeconds = (winner == 1) ? (int) grayTime : (int) whiteTime;
+            gameTimeInSeconds = (winner == 1) ? (int) grayTime : (winner == 2) ? (int) whiteTime : Math.max((int) grayTime, (int) whiteTime);
         } else {
             gameTimeInSeconds = (int) time;
         }
@@ -418,12 +595,20 @@ public class ChessBoardClient extends Application {
         Platform.runLater(victoryScreen::show);
     }
 
-    // New method for local mode with separate timers
+    // Fixed method for local mode with separate timers
     public void countTimeLocal() {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         executor.scheduleAtFixedRate(() -> {
             if (winner != 0) {
-                String winnerText = (winner == 1) ? "GRAY WON!" : "WHITE WON!";
+                String winnerText;
+                if (winner == 1) {
+                    winnerText = "GRAY WON!";
+                } else if (winner == 2) {
+                    winnerText = "WHITE WON!";
+                } else {
+                    winnerText = "DRAW!";
+                }
+
                 Platform.runLater(() -> {
                     grayTimer.set("GRAY: " + (int) grayTime + "s");
                     whiteTimer.set("WHITE: " + (int) whiteTime + "s");
@@ -434,12 +619,12 @@ public class ChessBoardClient extends Application {
             }
 
             // Update the timer for the current player
-            if (isItMyTurn) {
-                grayTime += 0.1;
-                Platform.runLater(() -> grayTimer.set("GRAY: " + (int) grayTime + "s"));
-            } else {
+            if (isWhiteTurn) {
                 whiteTime += 0.1;
                 Platform.runLater(() -> whiteTimer.set("WHITE: " + (int) whiteTime + "s"));
+            } else {
+                grayTime += 0.1;
+                Platform.runLater(() -> grayTimer.set("GRAY: " + (int) grayTime + "s"));
             }
         }, 0, 100, TimeUnit.MILLISECONDS);
     }
@@ -508,6 +693,10 @@ public class ChessBoardClient extends Application {
                                 winner = 2;
                                 showVictoryScreen("WHITE WON!");
                             }
+                            case "DRAW" -> {
+                                winner = 0;
+                                showVictoryScreen("DRAW - 40 moves without capture!");
+                            }
                         }
                     }
                 } catch (IOException e) {
@@ -520,6 +709,7 @@ public class ChessBoardClient extends Application {
 
     /**
      * Evidenzia tutte le celle in cui è possibile muoversi con la pedina selezionata.
+     * MODIFICATO per rispettare la mangiata obbligatoria.
      */
     private void highlightPossibleMoves(Piece piece) {
         if (piece == null) return;
@@ -527,6 +717,40 @@ public class ChessBoardClient extends Application {
         int x = Coder.pixelToBoard(piece.getOldX());
         int y = Coder.pixelToBoard(piece.getOldY());
 
+        // Se mustCapture è true, evidenzia solo le catture
+        if (mustCapture) {
+            highlightOnlyCaptures(piece, x, y);
+            return;
+        }
+
+        // Altrimenti evidenzia tutte le mosse possibili
+        highlightAllMoves(piece, x, y);
+    }
+
+    /**
+     * Evidenzia solo le mosse di cattura per una pedina
+     */
+    private void highlightOnlyCaptures(Piece piece, int x, int y) {
+        // Direzioni da controllare in base al tipo di pedina
+        int[][] directions;
+        if (piece.getPieceType() == PieceType.GRAY_SUP || piece.getPieceType() == PieceType.WHITE_SUP) {
+            // Dame: tutte le direzioni
+            directions = new int[][]{{-1, -1}, {-1, 1}, {1, -1}, {1, 1}};
+        } else {
+            // Pedine normali: solo avanti
+            int moveDir = piece.getPieceType().moveDir;
+            directions = new int[][]{{-1, moveDir}, {1, moveDir}};
+        }
+
+        for (int[] dir : directions) {
+            checkAndHighlightCaptureTile(piece, x + dir[0] * 2, y + dir[1] * 2, x + dir[0], y + dir[1]);
+        }
+    }
+
+    /**
+     * Evidenzia tutte le mosse possibili (normale e catture)
+     */
+    private void highlightAllMoves(Piece piece, int x, int y) {
         // Verifica le mosse per le pedine normali
         if (piece.getPieceType() == PieceType.GRAY || piece.getPieceType() == PieceType.WHITE) {
             // Direzione di movimento (in base al colore)
