@@ -78,21 +78,31 @@ public class ClientHandler implements Runnable {
         int i = 1;
         while (socket1.isConnected() && (socket2 == null || socket2.isConnected()) && whitePieces * grayPieces > 0 && movesWithoutCapture < MAX_MOVES_WITHOUT_CAPTURE) {
             try {
-                currentPlayer = i % 2 * 2 - 1; // -1 for GRAY, 1 for WHITE
-
-                // Aggiorna mustCapture solo se non siamo in multi-jump
+                // Calcola il giocatore corrente
                 if (!isInMultiJump) {
+                    currentPlayer = i % 2 * 2 - 1; // -1 for GRAY, 1 for WHITE
                     updateMustCapture();
                 }
 
-                if (processMove(currentPlayer)) {
-                    if (!isInMultiJump) {
-                        i++; // Solo se non siamo in multi-jump
-                    }
+                System.out.println("Turn " + i + ", Player: " + (currentPlayer == -1 ? "GRAY" : "WHITE") +
+                        ", Multi-jump: " + isInMultiJump + ", Must capture: " + mustCapture);
+
+                boolean moveProcessed = processMove(currentPlayer);
+
+                if (moveProcessed && !isInMultiJump) {
+                    i++; // Incrementa solo se la mossa è stata processata e non siamo in multi-jump
+                } else if (!moveProcessed && !isInMultiJump) {
+                    // Se la mossa non è stata processata e non siamo in multi-jump, potrebbe essere un errore
+                    // Aggiungi un piccolo delay per evitare loop infiniti
+                    Thread.sleep(100);
                 }
             } catch (IOException e) {
                 closeEverything();
                 e.printStackTrace();
+                break;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             }
         }
 
@@ -306,15 +316,42 @@ public class ClientHandler implements Runnable {
                 toBufferedWriter = bufferedWriter1;
             }
 
-            if (fromBufferedWriter != null) {
+            // Invia PING solo se non siamo in multi-jump
+            if (!isInMultiJump && fromBufferedWriter != null) {
                 ping(fromBufferedWriter);
             }
 
             String messageFrom;
             if (fromBufferedReader != null) {
+                // Per i giocatori umani, attendi l'input solo se non siamo in multi-jump o se è il giocatore giusto
+                if (isInMultiJump) {
+                    // Durante multi-jump, solo il giocatore con multiJumpPiece può muovere
+                    boolean isCorrectPlayerForMultiJump = false;
+                    if (moveDir == -1 && (multiJumpPiece.getPieceType() == PieceType.GRAY || multiJumpPiece.getPieceType() == PieceType.GRAY_SUP)) {
+                        isCorrectPlayerForMultiJump = true;
+                    } else if (moveDir == 1 && (multiJumpPiece.getPieceType() == PieceType.WHITE || multiJumpPiece.getPieceType() == PieceType.WHITE_SUP)) {
+                        isCorrectPlayerForMultiJump = true;
+                    }
+
+                    if (!isCorrectPlayerForMultiJump) {
+                        return false; // Non è il turno di questo giocatore durante multi-jump
+                    }
+                }
+
                 messageFrom = fromBufferedReader.readLine();
+                if (messageFrom == null) {
+                    return false;
+                }
             } else {
-                // Se siamo in modalità CPU, aggiungiamo un ritardo prima di eseguire la mossa
+                // Modalità CPU
+                if (isInMultiJump) {
+                    // Durante multi-jump, solo il giocatore con multiJumpPiece può muovere
+                    boolean isCpuPieceInMultiJump = (multiJumpPiece.getPieceType() == PieceType.WHITE || multiJumpPiece.getPieceType() == PieceType.WHITE_SUP);
+                    if (!isCpuPieceInMultiJump) {
+                        return false; // Non è il turno del CPU durante multi-jump
+                    }
+                }
+
                 try {
                     System.out.println("CPU sta pensando...");
                     Thread.sleep(cpuMoveDelay);
@@ -322,11 +359,17 @@ public class ClientHandler implements Runnable {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     System.out.println("La pausa della CPU è stata interrotta");
+                    return false;
                 }
 
-                // Use AI to generate a move instead of random moves
-                messageFrom = ai.generateBestMove();
+                // Aggiorna l'AI con lo stato corrente del board
+                if (ai != null) {
+                    messageFrom = ai.generateBestMove();
+                } else {
+                    messageFrom = Coder.generateMove(); // Fallback
+                }
             }
+
             System.out.println("Received move: " + messageFrom);
 
             // Verifica se è un messaggio di chat

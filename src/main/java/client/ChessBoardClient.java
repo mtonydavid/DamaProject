@@ -474,12 +474,14 @@ public class ChessBoardClient extends Application {
 
     public void requestMove(Piece piece, int newX, int newY) {
         if (!isItMyTurn) {
-            makeMove(piece, newX, newY, new MoveResult(MoveType.NONE));
+            System.out.println("Not my turn - aborting move");
+            piece.abortMove();
             return;
         }
 
         // Verifica se la cella di destinazione è evidenziata
         if (!isValidCoordinate(newX, newY) || !board[newX][newY].isHighlighted()) {
+            System.out.println("Invalid destination - aborting move");
             piece.abortMove();
             return;
         }
@@ -487,10 +489,17 @@ public class ChessBoardClient extends Application {
         try {
             int oldBoardX = Coder.pixelToBoard(piece.getOldX());
             int oldBoardY = Coder.pixelToBoard(piece.getOldY());
-            bufferedWriter.write(oldBoardX + " " + oldBoardY + " " + newX + " " + newY);
+            String moveMessage = oldBoardX + " " + oldBoardY + " " + newX + " " + newY;
+            System.out.println("Sending move: " + moveMessage);
+
+            bufferedWriter.write(moveMessage);
             bufferedWriter.newLine();
             bufferedWriter.flush();
+
+            // Non impostare isItMyTurn = false qui, lascia che sia il server a decidere
         } catch (IOException e) {
+            System.out.println("Error sending move: " + e.getMessage());
+            piece.abortMove();
             e.printStackTrace();
         }
     }
@@ -498,13 +507,17 @@ public class ChessBoardClient extends Application {
     private void makeMove(Piece piece, int newX, int newY, MoveResult moveResult) {
         MoveType moveType = moveResult.getMoveType();
         switch (moveType) {
-            case NONE -> piece.abortMove();
+            case NONE -> {
+                System.out.println("Move rejected - aborting");
+                piece.abortMove();
+            }
             case NORMAL -> {
                 board[Coder.pixelToBoard(piece.getOldX())][Coder.pixelToBoard(piece.getOldY())].setPiece(null);
                 piece.move(newX, newY);
                 board[newX][newY].setPiece(piece);
                 if (!mode.equals("local")) {
-                    isItMyTurn = false;
+                    isItMyTurn = false; // Solo per modalità online/CPU
+                    System.out.println("Turn ended - waiting for opponent");
                 }
                 if ((newY == 7 && piece.getPieceType() == PieceType.GRAY) || (newY == 0 && piece.getPieceType() == PieceType.WHITE)) {
                     Platform.runLater(piece::promote);
@@ -531,9 +544,14 @@ public class ChessBoardClient extends Application {
                 // Aggiorna il display del punteggio
                 Platform.runLater(() -> scoreDisplay.updateCounts(grayLivePieces, whiteLivePieces, grayKilledPieces, whiteKilledPieces));
 
+                // Per modalità online/CPU, potrebbe essere necessario attendere per multi-jump
+                // Il server gestirà se è ancora il nostro turno
                 if (!mode.equals("local")) {
-                    isItMyTurn = false;
+                    // Non impostare immediatamente isItMyTurn = false
+                    // Aspetta la risposta del server per sapere se continuare o meno
+                    System.out.println("Capture completed - waiting for server response");
                 }
+
                 if ((newY == 7 && piece.getPieceType() == PieceType.GRAY) || (newY == 0 && piece.getPieceType() == PieceType.WHITE)) {
                     Platform.runLater(piece::promote);
                 }
@@ -629,7 +647,7 @@ public class ChessBoardClient extends Application {
         }, 0, 100, TimeUnit.MILLISECONDS);
     }
 
-    // Keep original method for online mode
+    // Keep the original method for online mode
     public void countTime() {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         executor.scheduleAtFixedRate(() -> {
@@ -662,45 +680,69 @@ public class ChessBoardClient extends Application {
             while (socket != null && socket.isConnected() && winner == 0) {
                 try {
                     message = bufferedReader.readLine();
-                    System.out.println(message);
+                    if (message == null) {
+                        break;
+                    }
+
+                    System.out.println("Received from server: " + message);
 
                     if (message.startsWith("PING")) {
                         isItMyTurn = true;
+                        System.out.println("It's my turn now!");
                     } else {
                         String[] partsOfMessage = message.split(" ");
-                        int fromX = Integer.parseInt(partsOfMessage[0]);
-                        int fromY = Integer.parseInt(partsOfMessage[1]);
-                        int newX = Integer.parseInt(partsOfMessage[2]);
-                        int newY = Integer.parseInt(partsOfMessage[3]);
+                        if (partsOfMessage.length >= 5) {
+                            int fromX = Integer.parseInt(partsOfMessage[0]);
+                            int fromY = Integer.parseInt(partsOfMessage[1]);
+                            int newX = Integer.parseInt(partsOfMessage[2]);
+                            int newY = Integer.parseInt(partsOfMessage[3]);
 
-                        Piece piece = board[fromX][fromY].getPiece();
+                            Piece piece = board[fromX][fromY].getPiece();
+                            if (piece == null) {
+                                System.out.println("No piece at " + fromX + "," + fromY);
+                                continue;
+                            }
 
-                        switch (partsOfMessage[4]) {
-                            case "NONE" -> makeMove(piece, newX, newY, new MoveResult(MoveType.NONE));
-                            case "NORMAL" -> makeMove(piece, newX, newY, new MoveResult(MoveType.NORMAL));
-                            case "KILL" -> {
-                                int killX = Integer.parseInt(partsOfMessage[5]);
-                                int killY = Integer.parseInt(partsOfMessage[6]);
-                                Piece killedPiece = board[killX][killY].getPiece();
+                            switch (partsOfMessage[4]) {
+                                case "NONE" -> {
+                                    System.out.println("Move was invalid");
+                                    makeMove(piece, newX, newY, new MoveResult(MoveType.NONE));
+                                }
+                                case "NORMAL" -> {
+                                    System.out.println("Normal move confirmed");
+                                    makeMove(piece, newX, newY, new MoveResult(MoveType.NORMAL));
+                                }
+                                case "KILL" -> {
+                                    if (partsOfMessage.length >= 7) {
+                                        int killX = Integer.parseInt(partsOfMessage[5]);
+                                        int killY = Integer.parseInt(partsOfMessage[6]);
+                                        Piece killedPiece = board[killX][killY].getPiece();
 
-                                makeMove(piece, newX, newY, new MoveResult(MoveType.KILL, killedPiece));
-                            }
-                            case "END1" -> {
-                                winner = 1;
-                                showVictoryScreen("GRAY WON!");
-                            }
-                            case "END2" -> {
-                                winner = 2;
-                                showVictoryScreen("WHITE WON!");
-                            }
-                            case "DRAW" -> {
-                                winner = 0;
-                                showVictoryScreen("DRAW - 40 moves without capture!");
+                                        System.out.println("Capture move confirmed");
+                                        makeMove(piece, newX, newY, new MoveResult(MoveType.KILL, killedPiece));
+                                    }
+                                }
+                                case "END1" -> {
+                                    winner = 1;
+                                    showVictoryScreen("GRAY WON!");
+                                }
+                                case "END2" -> {
+                                    winner = 2;
+                                    showVictoryScreen("WHITE WON!");
+                                }
+                                case "DRAW" -> {
+                                    winner = 0;
+                                    showVictoryScreen("DRAW - 40 moves without capture!");
+                                }
                             }
                         }
                     }
                 } catch (IOException e) {
+                    System.out.println("Connection lost: " + e.getMessage());
                     closeEverything();
+                    break;
+                } catch (NumberFormatException e) {
+                    System.out.println("Invalid message format: " + e.getMessage());
                 }
             }
             closeEverything();
