@@ -37,8 +37,13 @@ public class ChessBoardClient extends Application {
     private int winner = 0;
     private final Label colorLabel = new Label();
 
-    private float time = 0;
-    private final Timer timer = new Timer();
+    // Separate timers for local mode
+    private float grayTime = 0;
+    private float whiteTime = 0;
+    private float time = 0; // Keep for online mode compatibility
+    private final Timer grayTimer = new Timer("GRAY");
+    private final Timer whiteTimer = new Timer("WHITE");
+    private final Timer timer = new Timer(); // Keep for online mode
 
     // Reference to the game stage
     private Stage gameStage;
@@ -112,8 +117,8 @@ public class ChessBoardClient extends Application {
         } else {
             // Modalità locale, senza connessione
             player = 1; // Il giocatore 1 inizia sempre
-            countTime();
-            isItMyTurn = true; // Il primo giocatore inizia
+            countTimeLocal(); // Use separate method for local mode
+            isItMyTurn = true; // Il primo giocatore inizia (GRAY)
         }
 
         Scene scene = new Scene(createContent());
@@ -125,7 +130,14 @@ public class ChessBoardClient extends Application {
     private Parent createContent() {
         Pane root = new Pane();
         root.setPrefSize(WIDTH * TILE_SIZE, HEIGHT * TILE_SIZE);
-        root.getChildren().addAll(tileGroup, pieceGroup, colorLabel, timer, scoreDisplay);
+
+        if ("local".equals(mode)) {
+            // Add separate timers for local mode
+            root.getChildren().addAll(tileGroup, pieceGroup, colorLabel, grayTimer, whiteTimer, scoreDisplay);
+        } else {
+            // Use single timer for online mode
+            root.getChildren().addAll(tileGroup, pieceGroup, colorLabel, timer, scoreDisplay);
+        }
 
         for (int y = 0; y < 8; y++) {
             for (int x = 0; x < 8; x++) {
@@ -164,7 +176,6 @@ public class ChessBoardClient extends Application {
 
     private Piece makePiece(PieceType pieceType, int x, int y) {
         Piece piece = new Piece(pieceType, x, y);
-
 
         piece.addEventHandler(MouseEvent.MOUSE_PRESSED, e -> {
             if (("local".equals(mode) &&
@@ -229,7 +240,7 @@ public class ChessBoardClient extends Application {
         // Cambio turno solo se la mossa è valida
         if (result.getMoveType() != MoveType.NONE) {
             isItMyTurn = !isItMyTurn;
-            colorLabel.setText("Local Mode - Turn : " + (isItMyTurn ? "GRAY" : "WHITE"));
+            colorLabel.setText("Local Mode - Turn: " + (isItMyTurn ? "GRAY" : "WHITE"));
         }
     }
 
@@ -282,7 +293,6 @@ public class ChessBoardClient extends Application {
 
         return new MoveResult(MoveType.NONE);
     }
-
 
     // Modifica il metodo requestMove per tenere conto dell'evidenziazione
     public void requestMove(Piece piece, int newX, int newY) {
@@ -386,8 +396,15 @@ public class ChessBoardClient extends Application {
     }
 
     private void showVictoryScreen(String winnerText) {
-        // Aggiunto metodo per visualizzare la schermata di vittoria
-        int gameTimeInSeconds = (int) time;
+        // Get the total time for the winner in local mode
+        int gameTimeInSeconds;
+        if ("local".equals(mode)) {
+            // In local mode, show the time of the winning player
+            gameTimeInSeconds = (winner == 1) ? (int) grayTime : (int) whiteTime;
+        } else {
+            gameTimeInSeconds = (int) time;
+        }
+
         VictoryScreen victoryScreen = new VictoryScreen(
                 winnerText,
                 gameTimeInSeconds,
@@ -401,40 +418,54 @@ public class ChessBoardClient extends Application {
         Platform.runLater(victoryScreen::show);
     }
 
+    // New method for local mode with separate timers
+    public void countTimeLocal() {
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        executor.scheduleAtFixedRate(() -> {
+            if (winner != 0) {
+                String winnerText = (winner == 1) ? "GRAY WON!" : "WHITE WON!";
+                Platform.runLater(() -> {
+                    grayTimer.set("GRAY: " + (int) grayTime + "s");
+                    whiteTimer.set("WHITE: " + (int) whiteTime + "s");
+                });
+                Platform.runLater(() -> showVictoryScreen(winnerText));
+                executor.shutdown();
+                return;
+            }
+
+            // Update the timer for the current player
+            if (isItMyTurn) {
+                grayTime += 0.1;
+                Platform.runLater(() -> grayTimer.set("GRAY: " + (int) grayTime + "s"));
+            } else {
+                whiteTime += 0.1;
+                Platform.runLater(() -> whiteTimer.set("WHITE: " + (int) whiteTime + "s"));
+            }
+        }, 0, 100, TimeUnit.MILLISECONDS);
+    }
+
+    // Keep original method for online mode
     public void countTime() {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         executor.scheduleAtFixedRate(() -> {
             if (winner != 0) {
-                if ("local".equals(mode)) {
-                    String winnerText = (winner == 1) ? "GRAY WON!" : "WHITE WON!";
-                    Platform.runLater(() -> timer.set(winnerText));
+                String winnerText = (winner == player) ? "YOU WON!" : "YOU LOST!";
+                Platform.runLater(() -> timer.set(winnerText));
 
-                    // Mostra la schermata di vittoria dopo aver determinato il vincitore
-                    Platform.runLater(() -> showVictoryScreen(winnerText));
-                } else {
-                    String winnerText = (winner == player) ? "YOU WON!" : "YOU LOST!";
-                    Platform.runLater(() -> timer.set(winnerText));
-
-                    // Versione tradotta per la modalità online
-                    Platform.runLater(() -> {
-                        if (winner == 1) {
-                            showVictoryScreen("GRAY WON!");
-                        } else {
-                            showVictoryScreen("WHITE WON!");
-                        }
-                    });
-                }
+                // Versione tradotta per la modalità online
+                Platform.runLater(() -> {
+                    if (winner == 1) {
+                        showVictoryScreen("GRAY WON!");
+                    } else {
+                        showVictoryScreen("WHITE WON!");
+                    }
+                });
                 executor.shutdown();
             }
 
             if (isItMyTurn) {
                 time += 0.1;
-                if ("local".equals(mode)) {
-                    String currentPlayer = isItMyTurn ? "GRAY" : "WHITE";
-                    Platform.runLater(() -> timer.set("Time " + currentPlayer + ": " + (int) time + "s."));
-                } else {
-                    Platform.runLater(() -> timer.set("Timer: " + (int) time + "s."));
-                }
+                Platform.runLater(() -> timer.set("Timer: " + (int) time + "s."));
             }
         }, 0, 100, TimeUnit.MILLISECONDS);
     }
@@ -577,7 +608,6 @@ public class ChessBoardClient extends Application {
     private boolean isValidCoordinate(int x, int y) {
         return x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT;
     }
-
 
     private void closeEverything() {
         try {
