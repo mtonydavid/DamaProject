@@ -54,8 +54,6 @@ public class ChessBoardClient extends Application {
 
     private Piece selectedPiece = null;
 
-    private GameChat gameChat;
-
     public static void main(String[] args) {
         if (args.length > 0) {
             // Se ci sono argomenti, avvia direttamente la partita
@@ -156,13 +154,6 @@ public class ChessBoardClient extends Application {
             colorLabel.setText("Local Mode - Turn: GRAY");
         } else {
             colorLabel.setText("You are" + ((player == 1) ? " GRAY" : " WHITE"));
-
-            // Aggiungi la chat solo per modalità online
-            if (!mode.equals("local")) {
-                String playerName = "Giocatore " + player;
-                gameChat = new GameChat(bufferedWriter, playerName);
-                root.getChildren().add(gameChat);
-            }
         }
 
         // Aggiorna il display del punteggio iniziale
@@ -213,6 +204,7 @@ public class ChessBoardClient extends Application {
 
         return piece;
     }
+
     // Modifica il metodo handleLocalMove per tenere conto dell'evidenziazione
     private void handleLocalMove(Piece piece, int newX, int newY) {
         // Verifica se è il turno del giocatore corretto
@@ -395,7 +387,7 @@ public class ChessBoardClient extends Application {
 
     private void showVictoryScreen(String winnerText) {
         // Aggiunto metodo per visualizzare la schermata di vittoria
-        int gameTimeInSeconds = (int)time;
+        int gameTimeInSeconds = (int) time;
         VictoryScreen victoryScreen = new VictoryScreen(
                 winnerText,
                 gameTimeInSeconds,
@@ -438,10 +430,10 @@ public class ChessBoardClient extends Application {
             if (isItMyTurn) {
                 time += 0.1;
                 if ("local".equals(mode)) {
-                    String currentPlayer = isItMyTurn ? "GRAY" : "WHITE" ;
-                    Platform.runLater(() -> timer.set("Time " + currentPlayer + ": " + (int)time + "s."));
+                    String currentPlayer = isItMyTurn ? "GRAY" : "WHITE";
+                    Platform.runLater(() -> timer.set("Time " + currentPlayer + ": " + (int) time + "s."));
                 } else {
-                    Platform.runLater(() -> timer.set("Timer: " + (int)time + "s."));
+                    Platform.runLater(() -> timer.set("Timer: " + (int) time + "s."));
                 }
             }
         }, 0, 100, TimeUnit.MILLISECONDS);
@@ -451,31 +443,12 @@ public class ChessBoardClient extends Application {
         new Thread(() -> {
             String message;
 
-            // Crea la chat se non esiste già
-            if (gameChat == null) {
-                String playerName = "Giocatore " + player;
-                gameChat = new GameChat(bufferedWriter, playerName);
-                Platform.runLater(() -> {
-                    // Aggiungi la chat al layout principale
-                    ((Pane) pieceGroup.getParent()).getChildren().add(gameChat);
-                });
-            }
-
             while (socket != null && socket.isConnected() && winner == 0) {
                 try {
                     message = bufferedReader.readLine();
                     System.out.println(message);
 
-                    // Controlla se è un messaggio di chat
-                    if (message.startsWith("CHAT ")) {
-                        String[] parts = message.split(" ", 3);
-                        if (parts.length >= 3) {
-                            String sender = parts[1];
-                            String chatMessage = parts[2];
-                            gameChat.receiveMessage(sender, chatMessage);
-                        }
-                        continue; // Passa al prossimo messaggio
-                    } else if (message.startsWith("PING")) {
+                    if (message.startsWith("PING")) {
                         isItMyTurn = true;
                     } else {
                         String[] partsOfMessage = message.split(" ");
@@ -486,7 +459,7 @@ public class ChessBoardClient extends Application {
 
                         Piece piece = board[fromX][fromY].getPiece();
 
-                        switch(partsOfMessage[4]) {
+                        switch (partsOfMessage[4]) {
                             case "NONE" -> makeMove(piece, newX, newY, new MoveResult(MoveType.NONE));
                             case "NORMAL" -> makeMove(piece, newX, newY, new MoveResult(MoveType.NORMAL));
                             case "KILL" -> {
@@ -551,6 +524,7 @@ public class ChessBoardClient extends Application {
             checkAndHighlightCaptureTile(piece, x + 2, y + 2, x + 1, y + 1);
         }
     }
+
     /**
      * Verifica se una cella è valida per una mossa normale e la evidenzia.
      */
@@ -559,6 +533,7 @@ public class ChessBoardClient extends Application {
             board[x][y].highlight();
         }
     }
+
     /**
      * Verifica se una cella è valida per una mossa di cattura e la evidenzia.
      */
@@ -595,6 +570,7 @@ public class ChessBoardClient extends Application {
             }
         }
     }
+
     /**
      * Verifica se le coordinate sono valide.
      */
