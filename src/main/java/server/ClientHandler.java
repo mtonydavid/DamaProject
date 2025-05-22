@@ -79,7 +79,11 @@ public class ClientHandler implements Runnable {
         while (socket1.isConnected() && (socket2 == null || socket2.isConnected()) && whitePieces * grayPieces > 0 && movesWithoutCapture < MAX_MOVES_WITHOUT_CAPTURE) {
             try {
                 currentPlayer = i % 2 * 2 - 1; // -1 for GRAY, 1 for WHITE
-                updateMustCapture();
+
+                // Aggiorna mustCapture solo se non siamo in multi-jump
+                if (!isInMultiJump) {
+                    updateMustCapture();
+                }
 
                 if (processMove(currentPlayer)) {
                     if (!isInMultiJump) {
@@ -148,17 +152,44 @@ public class ClientHandler implements Runnable {
         int oldX = Coder.pixelToBoard(piece.getOldX());
         int oldY = Coder.pixelToBoard(piece.getOldY());
 
-        if (Math.abs(newX - oldX) == 1 && newY - oldY == piece.getPieceType().moveDir ) {
-            return new MoveResult(MoveType.NORMAL);
-        } else if (Math.abs(newX - oldX) == 2 && Math.abs(newY - oldY) == 2) {
-            int middleX = oldX + (newX - oldX) / 2;
-            int middleY = oldY + (newY - oldY) / 2;
-
-            if (board[middleX][middleY].hasPiece() && board[middleX][middleY].getPiece().getPieceType() != piece.getPieceType()) {
-                return new MoveResult(MoveType.KILL, board[middleX][middleY].getPiece());
+        // Regole per pedine normali
+        if (piece.getPieceType() == PieceType.GRAY || piece.getPieceType() == PieceType.WHITE) {
+            // Mossa normale (una casella in diagonale)
+            if (Math.abs(newX - oldX) == 1 && newY - oldY == piece.getPieceType().moveDir) {
+                return new MoveResult(MoveType.NORMAL);
             }
-        } else if ((piece.getPieceType() == PieceType.GRAY_SUP || piece.getPieceType() == PieceType.WHITE_SUP ) && (Math.abs(newX - oldX) == 1 && Math.abs(newY - oldY) == 1)) {
-            return new MoveResult(MoveType.NORMAL);
+            // Mossa di cattura (due caselle in diagonale)
+            else if (Math.abs(newX - oldX) == 2 && Math.abs(newY - oldY) == 2) {
+                int middleX = oldX + (newX - oldX) / 2;
+                int middleY = oldY + (newY - oldY) / 2;
+
+                if (board[middleX][middleY].hasPiece()) {
+                    Piece middlePiece = board[middleX][middleY].getPiece();
+                    // Verifica che sia una pedina avversaria
+                    if (isOpponentPiece(piece, middlePiece)) {
+                        return new MoveResult(MoveType.KILL, middlePiece);
+                    }
+                }
+            }
+        }
+        // Regole per le dame
+        else if (piece.getPieceType() == PieceType.GRAY_SUP || piece.getPieceType() == PieceType.WHITE_SUP) {
+            // Le dame possono muoversi in tutte le direzioni diagonali
+            if (Math.abs(newX - oldX) == 1 && Math.abs(newY - oldY) == 1) {
+                return new MoveResult(MoveType.NORMAL);
+            }
+            // Cattura per le dame
+            else if (Math.abs(newX - oldX) == 2 && Math.abs(newY - oldY) == 2) {
+                int middleX = oldX + (newX - oldX) / 2;
+                int middleY = oldY + (newY - oldY) / 2;
+
+                if (board[middleX][middleY].hasPiece()) {
+                    Piece middlePiece = board[middleX][middleY].getPiece();
+                    if (isOpponentPiece(piece, middlePiece)) {
+                        return new MoveResult(MoveType.KILL, middlePiece);
+                    }
+                }
+            }
         }
 
         return new MoveResult(MoveType.NONE);
@@ -174,7 +205,15 @@ public class ClientHandler implements Runnable {
             for (int x = 0; x < ChessBoardClient.WIDTH; x++) {
                 if (board[x][y].hasPiece()) {
                     Piece piece = board[x][y].getPiece();
-                    if (Math.signum(piece.getPieceType().moveDir) == Math.signum(moveDir)) {
+                    // Controlla se la pedina appartiene al giocatore corrente
+                    boolean belongsToCurrentPlayer = false;
+                    if (moveDir == -1) { // Turno GRAY
+                        belongsToCurrentPlayer = (piece.getPieceType() == PieceType.GRAY || piece.getPieceType() == PieceType.GRAY_SUP);
+                    } else { // Turno WHITE
+                        belongsToCurrentPlayer = (piece.getPieceType() == PieceType.WHITE || piece.getPieceType() == PieceType.WHITE_SUP);
+                    }
+
+                    if (belongsToCurrentPlayer) {
                         allCaptures.addAll(findPossibleCaptures(piece));
                     }
                 }
@@ -227,7 +266,13 @@ public class ClientHandler implements Runnable {
      * Verifica se una pedina è avversaria
      */
     private boolean isOpponentPiece(Piece piece, Piece otherPiece) {
-        return Math.signum(piece.getPieceType().moveDir) != Math.signum(otherPiece.getPieceType().moveDir);
+        PieceType pieceType = piece.getPieceType();
+        PieceType otherType = otherPiece.getPieceType();
+
+        boolean isGrayPiece = (pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP);
+        boolean isOtherGray = (otherType == PieceType.GRAY || otherType == PieceType.GRAY_SUP);
+
+        return isGrayPiece != isOtherGray;
     }
 
     /**
@@ -282,7 +327,7 @@ public class ClientHandler implements Runnable {
                 // Use AI to generate a move instead of random moves
                 messageFrom = ai.generateBestMove();
             }
-            System.out.println(messageFrom);
+            System.out.println("Received move: " + messageFrom);
 
             // Verifica se è un messaggio di chat
             if (messageFrom.startsWith("CHAT ")) {
@@ -295,20 +340,37 @@ public class ClientHandler implements Runnable {
                 return false; // Non è una mossa, quindi ritorna false
             }
 
-            int fromX = Integer.parseInt(messageFrom.split(" ")[0]);
-            int fromY = Integer.parseInt(messageFrom.split(" ")[1]);
-            int newX = (int) Float.parseFloat(messageFrom.split(" ")[2]);
-            int newY = (int) Float.parseFloat(messageFrom.split(" ")[3]);
+            String[] parts = messageFrom.split(" ");
+            if (parts.length < 4) {
+                System.out.println("Invalid move format: " + messageFrom);
+                return false;
+            }
+
+            int fromX = Integer.parseInt(parts[0]);
+            int fromY = Integer.parseInt(parts[1]);
+            int newX = Integer.parseInt(parts[2]);
+            int newY = Integer.parseInt(parts[3]);
+
+            System.out.println("Processing move from (" + fromX + "," + fromY + ") to (" + newX + "," + newY + ")");
 
             if (board[fromX][fromY].getPiece() == null) {
+                System.out.println("No piece at source position");
                 return false;
             }
 
             Piece piece = board[fromX][fromY].getPiece();
 
             // Verifica se è il turno corretto
-            if (Math.signum(piece.getPieceType().moveDir) != Math.signum(moveDir)) {
-                if (fromBufferedReader != null) {
+            boolean isCorrectPlayer = false;
+            if (moveDir == -1) { // Turno GRAY
+                isCorrectPlayer = (piece.getPieceType() == PieceType.GRAY || piece.getPieceType() == PieceType.GRAY_SUP);
+            } else { // Turno WHITE
+                isCorrectPlayer = (piece.getPieceType() == PieceType.WHITE || piece.getPieceType() == PieceType.WHITE_SUP);
+            }
+
+            if (!isCorrectPlayer) {
+                System.out.println("Wrong player turn");
+                if (fromBufferedWriter != null) {
                     fromBufferedWriter.write(Coder.encode(piece, newX, newY, new MoveResult(MoveType.NONE)));
                     fromBufferedWriter.newLine();
                     fromBufferedWriter.flush();
@@ -318,7 +380,8 @@ public class ClientHandler implements Runnable {
 
             // Verifica se è in multi-jump e la pedina è quella corretta
             if (isInMultiJump && piece != multiJumpPiece) {
-                if (fromBufferedReader != null) {
+                System.out.println("Must continue multi-jump with the same piece");
+                if (fromBufferedWriter != null) {
                     fromBufferedWriter.write(Coder.encode(piece, newX, newY, new MoveResult(MoveType.NONE)));
                     fromBufferedWriter.newLine();
                     fromBufferedWriter.flush();
@@ -327,11 +390,24 @@ public class ClientHandler implements Runnable {
             }
 
             MoveResult moveResult = tryMove(piece, newX, newY);
+            System.out.println("Move result: " + moveResult.getMoveType());
 
-            // Verifica mangiata obbligatoria
-            if (mustCapture && moveResult.getMoveType() != MoveType.KILL) {
-                if (fromBufferedReader != null) {
+            // Verifica mangiata obbligatoria solo se non siamo in multi-jump o se la mossa non è valida
+            if (mustCapture && moveResult.getMoveType() != MoveType.KILL && moveResult.getMoveType() != MoveType.NONE) {
+                System.out.println("Must capture when capture is available");
+                if (fromBufferedWriter != null) {
                     fromBufferedWriter.write(Coder.encode(piece, newX, newY, new MoveResult(MoveType.NONE)));
+                    fromBufferedWriter.newLine();
+                    fromBufferedWriter.flush();
+                }
+                return false;
+            }
+
+            // Se la mossa non è valida, rifiutala
+            if (moveResult.getMoveType() == MoveType.NONE) {
+                System.out.println("Invalid move");
+                if (fromBufferedWriter != null) {
+                    fromBufferedWriter.write(Coder.encode(piece, newX, newY, moveResult));
                     fromBufferedWriter.newLine();
                     fromBufferedWriter.flush();
                 }
@@ -342,17 +418,19 @@ public class ClientHandler implements Runnable {
             makeMove(piece, newX, newY, moveResult);
 
             // Gestisci multi-jump
+            boolean shouldChangeTurn = true;
             if (moveResult.getMoveType() == MoveType.KILL) {
                 movesWithoutCapture = 0; // Reset contatore
 
-                // Controlla se ci sono altre catture possibili
+                // Controlla se ci sono altre catture possibili con la stessa pedina
                 List<MoveResult> additionalCaptures = findPossibleCaptures(piece);
                 if (!additionalCaptures.isEmpty()) {
+                    System.out.println("Multi-jump continues");
                     isInMultiJump = true;
                     multiJumpPiece = piece;
-                    // Non inviare il messaggio ancora, continua il multi-jump
-                    return false; // Non cambiare turno
+                    shouldChangeTurn = false; // Non cambiare turno
                 } else {
+                    System.out.println("Multi-jump ended");
                     isInMultiJump = false;
                     multiJumpPiece = null;
                 }
@@ -369,7 +447,7 @@ public class ClientHandler implements Runnable {
                 toBufferedWriter.flush();
             }
 
-            if (fromBufferedReader != null) {
+            if (fromBufferedWriter != null) {
                 fromBufferedWriter.write(toMessage);
                 fromBufferedWriter.newLine();
                 fromBufferedWriter.flush();
@@ -392,18 +470,21 @@ public class ClientHandler implements Runnable {
                     toBufferedWriter.flush();
                 }
 
-                if (fromBufferedReader != null) {
+                if (fromBufferedWriter != null) {
                     fromBufferedWriter.write(endOfGameMessage);
                     fromBufferedWriter.newLine();
                     fromBufferedWriter.flush();
                 }
             }
 
-            return moveResult.getMoveType() != MoveType.NONE;
+            return shouldChangeTurn;
         } catch (IOException e) {
             closeEverything();
             e.printStackTrace();
             throw e;
+        } catch (NumberFormatException e) {
+            System.out.println("Invalid move format: " + e.getMessage());
+            return false;
         }
     }
 
@@ -423,6 +504,8 @@ public class ClientHandler implements Runnable {
                 board[Coder.pixelToBoard(piece.getOldX())][Coder.pixelToBoard(piece.getOldY())].setPiece(null);
                 piece.move(newX, newY);
                 board[newX][newY].setPiece(piece);
+
+                // Aggiorna il conteggio delle pedine
                 if (piece.getPieceType() == PieceType.GRAY || piece.getPieceType() == PieceType.GRAY_SUP) {
                     whitePieces--;
                 } else {
@@ -431,6 +514,8 @@ public class ClientHandler implements Runnable {
 
                 Piece otherPiece = moveResult.getPiece();
                 board[Coder.pixelToBoard(otherPiece.getOldX())][Coder.pixelToBoard(otherPiece.getOldY())].setPiece(null);
+
+                // Promuovi se necessario
                 if ((newY == 7 && piece.getPieceType() == PieceType.GRAY) || (newY == 0 && piece.getPieceType() == PieceType.WHITE)) {
                     piece.promote();
                 }
