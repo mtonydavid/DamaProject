@@ -191,10 +191,9 @@ public class ChessBoardClient extends Application {
 
         piece.addEventHandler(MouseEvent.MOUSE_PRESSED, e -> {
             if ("local".equals(mode)) {
-                // For local mode, use isWhiteTurn variable
+                // Logica locale esistente
                 boolean isWhitePiece = pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP;
 
-                // Se siamo in multi-jump, solo quella pedina può muoversi
                 if (isInMultiJump && piece != multiJumpPiece) {
                     return;
                 }
@@ -205,10 +204,19 @@ public class ChessBoardClient extends Application {
                     highlightPossibleMoves(piece);
                 }
             } else {
-                // For online mode, keep original logic
+                // Logica per online/CPU con aggiornamento mustCapture
                 if (isItMyTurn &&
                         ((player == 1 && (pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP)) ||
                                 (player == 2 && (pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP)))) {
+
+                    // Aggiorna mustCapture prima di evidenziare
+                    updateMustCapture();
+
+                    // Se siamo in multi-jump, solo quella pedina può muoversi
+                    if (isInMultiJump && piece != multiJumpPiece) {
+                        return;
+                    }
+
                     removeAllHighlights();
                     selectedPiece = piece;
                     highlightPossibleMoves(piece);
@@ -217,29 +225,26 @@ public class ChessBoardClient extends Application {
         });
 
         piece.setOnMouseReleased(e -> {
-            // Calcola le coordinate di board arrotondando alla casella più vicina
+            // ... resto del codice esistente
             int newX = (int) Math.round(piece.getLayoutX() / TILE_SIZE);
             int newY = (int) Math.round(piece.getLayoutY() / TILE_SIZE);
 
-            // Assicurati che le coordinate siano all'interno dei limiti della scacchiera
             newX = Math.max(0, Math.min(WIDTH - 1, newX));
             newY = Math.max(0, Math.min(HEIGHT - 1, newY));
 
             if ("local".equals(mode)) {
-                // In modalità locale, gestiamo le mosse direttamente
                 handleLocalMove(piece, newX, newY);
             } else {
-                // Nelle altre modalità, inviamo la richiesta al server
                 requestMove(piece, newX, newY);
             }
 
-            // Rimuovi evidenziazioni dopo la mossa
             removeAllHighlights();
             selectedPiece = null;
         });
 
         return piece;
     }
+
 
     private void handleLocalMove(Piece piece, int newX, int newY) {
         // Check if it's the correct player's turn
@@ -366,9 +371,11 @@ public class ChessBoardClient extends Application {
                     boolean isCurrentPlayerPiece = false;
 
                     if ("local".equals(mode)) {
+                        // Logica locale esistente
                         boolean isWhitePiece = piece.getPieceType() == PieceType.WHITE || piece.getPieceType() == PieceType.WHITE_SUP;
                         isCurrentPlayerPiece = (isWhiteTurn == isWhitePiece);
                     } else {
+                        // Logica per online/CPU
                         isCurrentPlayerPiece = ((player == 1 && (piece.getPieceType() == PieceType.GRAY || piece.getPieceType() == PieceType.GRAY_SUP)) ||
                                 (player == 2 && (piece.getPieceType() == PieceType.WHITE || piece.getPieceType() == PieceType.WHITE_SUP)));
                     }
@@ -383,12 +390,21 @@ public class ChessBoardClient extends Application {
         return allCaptures;
     }
 
+
     /**
      * Aggiorna la variabile mustCapture in base alle catture disponibili
      */
     private void updateMustCapture() {
-        List<MoveResult> possibleCaptures = findAllPossibleCaptures();
-        mustCapture = !possibleCaptures.isEmpty();
+        if ("local".equals(mode)) {
+            // Logica locale esistente
+            List<MoveResult> possibleCaptures = findAllPossibleCaptures();
+            mustCapture = !possibleCaptures.isEmpty();
+        } else {
+            // Per online/CPU: aggiorna mustCapture quando riceviamo il PING
+            // Il server ci dirà implicitamente se dobbiamo catturare
+            List<MoveResult> possibleCaptures = findAllPossibleCaptures();
+            mustCapture = !possibleCaptures.isEmpty();
+        }
     }
 
     /**
@@ -698,7 +714,9 @@ public class ChessBoardClient extends Application {
 
                     if (message.startsWith("PING")) {
                         isItMyTurn = true;
-                        System.out.println("PING received - It's my turn now!");
+                        // Aggiorna mustCapture quando riceviamo PING
+                        updateMustCapture();
+                        System.out.println("PING received - It's my turn! Must capture: " + mustCapture);
                     } else {
                         String[] partsOfMessage = message.split(" ");
                         if (partsOfMessage.length >= 5) {
@@ -720,10 +738,14 @@ public class ChessBoardClient extends Application {
                                 case "NONE" -> {
                                     System.out.println("Server rejected move");
                                     makeMove(piece, newX, newY, new MoveResult(MoveType.NONE));
+                                    isInMultiJump = false;
+                                    multiJumpPiece = null;
                                 }
                                 case "NORMAL" -> {
                                     System.out.println("Server confirmed normal move");
                                     makeMove(piece, newX, newY, new MoveResult(MoveType.NORMAL));
+                                    isInMultiJump = false;
+                                    multiJumpPiece = null;
                                 }
                                 case "KILL" -> {
                                     if (partsOfMessage.length >= 7) {
@@ -733,6 +755,20 @@ public class ChessBoardClient extends Application {
 
                                         System.out.println("Server confirmed capture move");
                                         makeMove(piece, newX, newY, new MoveResult(MoveType.KILL, killedPiece));
+
+                                        // Controlla se ci sono altre catture possibili con la stessa pedina
+                                        List<MoveResult> additionalCaptures = findPossibleCaptures(piece);
+                                        if (!additionalCaptures.isEmpty() && isItMyTurn) {
+                                            // Multi-jump continua
+                                            isInMultiJump = true;
+                                            multiJumpPiece = piece;
+                                            mustCapture = true;
+                                            System.out.println("Multi-jump detected - must continue with same piece");
+                                        } else {
+                                            // Multi-jump finito
+                                            isInMultiJump = false;
+                                            multiJumpPiece = null;
+                                        }
                                     }
                                 }
                                 case "END1" -> {
@@ -745,7 +781,7 @@ public class ChessBoardClient extends Application {
                                 }
                                 case "DRAW" -> {
                                     winner = 0;
-                                    Platform.runLater(() -> showVictoryScreen("DRAW"));
+                                    Platform.runLater(() -> showVictoryScreen("DRAW - 40 moves without capture!"));
                                 }
                             }
                         }
@@ -772,7 +808,7 @@ public class ChessBoardClient extends Application {
         int x = Coder.pixelToBoard(piece.getOldX());
         int y = Coder.pixelToBoard(piece.getOldY());
 
-        // Se mustCapture è true, evidenzia solo le catture
+        // Se mustCapture è true in qualsiasi modalità, evidenzia solo le catture
         if (mustCapture) {
             highlightOnlyCaptures(piece, x, y);
             return;
