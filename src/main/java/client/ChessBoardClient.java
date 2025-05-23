@@ -479,7 +479,7 @@ public class ChessBoardClient extends Application {
             return;
         }
 
-        // Verifica se la cella di destinazione è evidenziata
+        // Verifica se la cella di destinazione è evidenziata (validazione lato client)
         if (!isValidCoordinate(newX, newY) || !board[newX][newY].isHighlighted()) {
             System.out.println("Invalid destination - aborting move");
             piece.abortMove();
@@ -496,7 +496,8 @@ public class ChessBoardClient extends Application {
             bufferedWriter.newLine();
             bufferedWriter.flush();
 
-            // Non impostare isItMyTurn = false qui, lascia che sia il server a decidere
+            // NON impostare isItMyTurn = false qui - lascia che sia il server a decidere
+            System.out.println("Move sent, waiting for server response...");
         } catch (IOException e) {
             System.out.println("Error sending move: " + e.getMessage());
             piece.abortMove();
@@ -510,15 +511,23 @@ public class ChessBoardClient extends Application {
             case NONE -> {
                 System.out.println("Move rejected - aborting");
                 piece.abortMove();
+                // Per le modalità online, potrebbe essere che dobbiamo aspettare un nuovo PING
+                if (!mode.equals("local")) {
+                    isItMyTurn = false; // Resetta il turno se la mossa è stata rifiutata
+                }
             }
             case NORMAL -> {
                 board[Coder.pixelToBoard(piece.getOldX())][Coder.pixelToBoard(piece.getOldY())].setPiece(null);
                 piece.move(newX, newY);
                 board[newX][newY].setPiece(piece);
+
+                // Per modalità online/CPU, il turno finisce dopo una mossa normale
                 if (!mode.equals("local")) {
-                    isItMyTurn = false; // Solo per modalità online/CPU
-                    System.out.println("Turn ended - waiting for opponent");
+                    isItMyTurn = false;
+                    System.out.println("Normal move completed - turn ended");
                 }
+
+                // Promozione
                 if ((newY == 7 && piece.getPieceType() == PieceType.GRAY) || (newY == 0 && piece.getPieceType() == PieceType.WHITE)) {
                     Platform.runLater(piece::promote);
                 }
@@ -544,14 +553,14 @@ public class ChessBoardClient extends Application {
                 // Aggiorna il display del punteggio
                 Platform.runLater(() -> scoreDisplay.updateCounts(grayLivePieces, whiteLivePieces, grayKilledPieces, whiteKilledPieces));
 
-                // Per modalità online/CPU, potrebbe essere necessario attendere per multi-jump
-                // Il server gestirà se è ancora il nostro turno
+                // Per modalità online/CPU: dopo una cattura, aspetta la risposta del server
+                // Il server ci dirà se possiamo continuare (multi-jump) o se il turno è finito
                 if (!mode.equals("local")) {
-                    // Non impostare immediatamente isItMyTurn = false
-                    // Aspetta la risposta del server per sapere se continuare o meno
-                    System.out.println("Capture completed - waiting for server response");
+                    // NON impostare isItMyTurn = false qui - aspetta il server
+                    System.out.println("Capture completed - waiting for server to determine next action");
                 }
 
+                // Promozione
                 if ((newY == 7 && piece.getPieceType() == PieceType.GRAY) || (newY == 0 && piece.getPieceType() == PieceType.WHITE)) {
                     Platform.runLater(piece::promote);
                 }
@@ -673,6 +682,7 @@ public class ChessBoardClient extends Application {
         }, 0, 100, TimeUnit.MILLISECONDS);
     }
 
+
     public void listenToServer() {
         new Thread(() -> {
             String message;
@@ -688,7 +698,7 @@ public class ChessBoardClient extends Application {
 
                     if (message.startsWith("PING")) {
                         isItMyTurn = true;
-                        System.out.println("It's my turn now!");
+                        System.out.println("PING received - It's my turn now!");
                     } else {
                         String[] partsOfMessage = message.split(" ");
                         if (partsOfMessage.length >= 5) {
@@ -703,13 +713,16 @@ public class ChessBoardClient extends Application {
                                 continue;
                             }
 
-                            switch (partsOfMessage[4]) {
+                            String moveType = partsOfMessage[4];
+                            System.out.println("Processing server response: " + moveType);
+
+                            switch (moveType) {
                                 case "NONE" -> {
-                                    System.out.println("Move was invalid");
+                                    System.out.println("Server rejected move");
                                     makeMove(piece, newX, newY, new MoveResult(MoveType.NONE));
                                 }
                                 case "NORMAL" -> {
-                                    System.out.println("Normal move confirmed");
+                                    System.out.println("Server confirmed normal move");
                                     makeMove(piece, newX, newY, new MoveResult(MoveType.NORMAL));
                                 }
                                 case "KILL" -> {
@@ -718,21 +731,21 @@ public class ChessBoardClient extends Application {
                                         int killY = Integer.parseInt(partsOfMessage[6]);
                                         Piece killedPiece = board[killX][killY].getPiece();
 
-                                        System.out.println("Capture move confirmed");
+                                        System.out.println("Server confirmed capture move");
                                         makeMove(piece, newX, newY, new MoveResult(MoveType.KILL, killedPiece));
                                     }
                                 }
                                 case "END1" -> {
                                     winner = 1;
-                                    showVictoryScreen("GRAY WON!");
+                                    Platform.runLater(() -> showVictoryScreen("GRAY WON!"));
                                 }
                                 case "END2" -> {
                                     winner = 2;
-                                    showVictoryScreen("WHITE WON!");
+                                    Platform.runLater(() -> showVictoryScreen("WHITE WON!"));
                                 }
                                 case "DRAW" -> {
                                     winner = 0;
-                                    showVictoryScreen("DRAW - 40 moves without capture!");
+                                    Platform.runLater(() -> showVictoryScreen("DRAW"));
                                 }
                             }
                         }

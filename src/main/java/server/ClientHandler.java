@@ -435,8 +435,8 @@ public class ClientHandler implements Runnable {
             MoveResult moveResult = tryMove(piece, newX, newY);
             System.out.println("Move result: " + moveResult.getMoveType());
 
-            // Verifica mangiata obbligatoria solo se non siamo in multi-jump o se la mossa non è valida
-            if (mustCapture && moveResult.getMoveType() != MoveType.KILL && moveResult.getMoveType() != MoveType.NONE) {
+            // Verifica mangiata obbligatoria solo se non siamo in multi-jump
+            if (mustCapture && moveResult.getMoveType() == MoveType.NORMAL) {
                 System.out.println("Must capture when capture is available");
                 if (fromBufferedWriter != null) {
                     fromBufferedWriter.write(Coder.encode(piece, newX, newY, new MoveResult(MoveType.NONE)));

@@ -162,20 +162,8 @@ public class VictoryScreen {
 
         whiteStatsBox.getChildren().addAll(whiteCircle, whiteDetails);
 
-        // Determine winner bonus
-        VBox winnerBonus = new VBox(5);
-        winnerBonus.setAlignment(Pos.CENTER);
-        Label bonusLabel = new Label("VICTORY BONUS!");
-        bonusLabel.setFont(Font.font("Arial", FontWeight.BOLD, 16));
-        bonusLabel.setTextFill(Color.valueOf("#5D5364"));
 
-        String winnerName = winnerText.contains("GRAY") ? "GRAY" : "WHITE";
-        Label winnerLabel = new Label(winnerName + " gains 100 bonus points!");
-        winnerLabel.setFont(Font.font("Arial", 14));
-
-        winnerBonus.getChildren().addAll(bonusLabel, winnerLabel);
-
-        statsBox.getChildren().addAll(statsTitle, grayStatsBox, whiteStatsBox, winnerBonus);
+        statsBox.getChildren().addAll(statsTitle, grayStatsBox, whiteStatsBox);
         return statsBox;
     }
 
