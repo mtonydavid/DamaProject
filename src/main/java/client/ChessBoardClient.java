@@ -57,7 +57,9 @@ public class ChessBoardClient extends Application {
     private int whiteKilledPieces = 0;
     private final ScoreDisplay scoreDisplay = new ScoreDisplay();
 
+    // FIXED: Gestione turni migliorata per modalità online
     private boolean isItMyTurn = false;
+    private boolean waitingForServerResponse = false;
 
     // Add separate variable for local mode turn management
     private boolean isWhiteTurn = true; // WHITE always starts first in local mode
@@ -70,6 +72,9 @@ public class ChessBoardClient extends Application {
     private Piece multiJumpPiece = null; // Pedina che sta facendo multi-jump
     private int movesWithoutCapture = 0; // Contatore per regola dei 40 turni
     private final int MAX_MOVES_WITHOUT_CAPTURE = 40; // Limite per patta
+
+    // FIXED: Timeout per evitare blocchi
+    private ScheduledExecutorService timeoutExecutor;
 
     public static void main(String[] args) {
         if (args.length > 0) {
@@ -124,6 +129,8 @@ public class ChessBoardClient extends Application {
                 closeEverything();
             }
 
+            // FIXED: Inizializza timeout executor
+            timeoutExecutor = Executors.newSingleThreadScheduledExecutor();
             countTime();
             listenToServer();
         } else {
@@ -177,7 +184,7 @@ public class ChessBoardClient extends Application {
         if ("local".equals(mode)) {
             updateTurnLabel();
         } else {
-            colorLabel.setText("You are" + ((player == 1) ? " GRAY" : " WHITE"));
+            updateOnlineLabel();
         }
 
         // Aggiorna il display del punteggio iniziale
@@ -191,41 +198,13 @@ public class ChessBoardClient extends Application {
 
         piece.addEventHandler(MouseEvent.MOUSE_PRESSED, e -> {
             if ("local".equals(mode)) {
-                // Logica locale esistente
-                boolean isWhitePiece = pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP;
-
-                if (isInMultiJump && piece != multiJumpPiece) {
-                    return;
-                }
-
-                if (isWhiteTurn == isWhitePiece) {
-                    removeAllHighlights();
-                    selectedPiece = piece;
-                    highlightPossibleMoves(piece);
-                }
+                handleLocalPieceSelection(piece, pieceType);
             } else {
-                // Logica per online/CPU con aggiornamento mustCapture
-                if (isItMyTurn &&
-                        ((player == 1 && (pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP)) ||
-                                (player == 2 && (pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP)))) {
-
-                    // Aggiorna mustCapture prima di evidenziare
-                    updateMustCapture();
-
-                    // Se siamo in multi-jump, solo quella pedina può muoversi
-                    if (isInMultiJump && piece != multiJumpPiece) {
-                        return;
-                    }
-
-                    removeAllHighlights();
-                    selectedPiece = piece;
-                    highlightPossibleMoves(piece);
-                }
+                handleOnlinePieceSelection(piece, pieceType);
             }
         });
 
         piece.setOnMouseReleased(e -> {
-            // ... resto del codice esistente
             int newX = (int) Math.round(piece.getLayoutX() / TILE_SIZE);
             int newY = (int) Math.round(piece.getLayoutY() / TILE_SIZE);
 
@@ -245,6 +224,47 @@ public class ChessBoardClient extends Application {
         return piece;
     }
 
+    // FIXED: Separata logica per selezione pezzi locale
+    private void handleLocalPieceSelection(Piece piece, PieceType pieceType) {
+        boolean isWhitePiece = pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP;
+
+        if (isInMultiJump && piece != multiJumpPiece) {
+            return;
+        }
+
+        if (isWhiteTurn == isWhitePiece) {
+            removeAllHighlights();
+            selectedPiece = piece;
+            highlightPossibleMoves(piece);
+        }
+    }
+
+    // FIXED: Separata logica per selezione pezzi online
+    private void handleOnlinePieceSelection(Piece piece, PieceType pieceType) {
+        if (!isItMyTurn || waitingForServerResponse) {
+            return;
+        }
+
+        // Verifica che sia il mio pezzo
+        boolean isMyPiece = ((player == 1 && (pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP)) ||
+                (player == 2 && (pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP)));
+
+        if (!isMyPiece) {
+            return;
+        }
+
+        // Se siamo in multi-jump, solo quella pedina può muoversi
+        if (isInMultiJump && piece != multiJumpPiece) {
+            return;
+        }
+
+        // Aggiorna mustCapture prima di evidenziare
+        updateMustCapture();
+
+        removeAllHighlights();
+        selectedPiece = piece;
+        highlightPossibleMoves(piece);
+    }
 
     private void handleLocalMove(Piece piece, int newX, int newY) {
         // Check if it's the correct player's turn
@@ -320,6 +340,165 @@ public class ChessBoardClient extends Application {
         }
     }
 
+    public void requestMove(Piece piece, int newX, int newY) {
+        // FIXED: Controlli più rigorosi
+        if (!isItMyTurn || waitingForServerResponse) {
+            System.out.println("Cannot move: myTurn=" + isItMyTurn + ", waiting=" + waitingForServerResponse);
+            piece.abortMove();
+            return;
+        }
+
+        // Verifica se la cella di destinazione è evidenziata (validazione lato client)
+        if (!isValidCoordinate(newX, newY) || !board[newX][newY].isHighlighted()) {
+            System.out.println("Invalid destination - aborting move");
+            piece.abortMove();
+            return;
+        }
+
+        try {
+            int oldBoardX = Coder.pixelToBoard(piece.getOldX());
+            int oldBoardY = Coder.pixelToBoard(piece.getOldY());
+            String moveMessage = oldBoardX + " " + oldBoardY + " " + newX + " " + newY;
+            System.out.println("Sending move: " + moveMessage);
+
+            bufferedWriter.write(moveMessage);
+            bufferedWriter.newLine();
+            bufferedWriter.flush();
+
+            // FIXED: Imposta stato e timeout
+            waitingForServerResponse = true;
+            startMoveTimeout();
+
+            System.out.println("Move sent, waiting for server response...");
+        } catch (IOException e) {
+            System.out.println("Error sending move: " + e.getMessage());
+            piece.abortMove();
+            waitingForServerResponse = false;
+            e.printStackTrace();
+        }
+    }
+
+    // FIXED: Timeout per evitare blocchi
+    private void startMoveTimeout() {
+        if (timeoutExecutor != null) {
+            timeoutExecutor.schedule(() -> {
+                if (waitingForServerResponse) {
+                    System.out.println("Move timeout - resetting state");
+                    Platform.runLater(() -> {
+                        waitingForServerResponse = false;
+                        // Non resettiamo isItMyTurn qui, aspettiamo il prossimo PING
+                    });
+                }
+            }, 10, TimeUnit.SECONDS);
+        }
+    }
+
+    private void makeMove(Piece piece, int newX, int newY, MoveResult moveResult) {
+        MoveType moveType = moveResult.getMoveType();
+        switch (moveType) {
+            case NONE -> {
+                System.out.println("Move rejected - aborting");
+                piece.abortMove();
+                // FIXED: Reset completo stato per modalità online
+                if (!mode.equals("local")) {
+                    waitingForServerResponse = false;
+                    isItMyTurn = false;
+                    isInMultiJump = false;
+                    multiJumpPiece = null;
+                    updateOnlineLabel();
+                }
+            }
+            case NORMAL -> {
+                board[Coder.pixelToBoard(piece.getOldX())][Coder.pixelToBoard(piece.getOldY())].setPiece(null);
+                piece.move(newX, newY);
+                board[newX][newY].setPiece(piece);
+
+                // FIXED: Per modalità online, reset stato dopo mossa normale
+                if (!mode.equals("local")) {
+                    waitingForServerResponse = false;
+                    isItMyTurn = false; // Il turno finisce dopo una mossa normale
+                    isInMultiJump = false;
+                    multiJumpPiece = null;
+                    updateOnlineLabel();
+                    System.out.println("Normal move completed - turn ended");
+                }
+
+                // Promozione
+                if ((newY == 7 && piece.getPieceType() == PieceType.GRAY) || (newY == 0 && piece.getPieceType() == PieceType.WHITE)) {
+                    Platform.runLater(piece::promote);
+                }
+            }
+            case KILL -> {
+                board[Coder.pixelToBoard(piece.getOldX())][Coder.pixelToBoard(piece.getOldY())].setPiece(null);
+                piece.move(newX, newY);
+                board[newX][newY].setPiece(piece);
+
+                Piece otherPiece = moveResult.getPiece();
+                board[Coder.pixelToBoard(otherPiece.getOldX())][Coder.pixelToBoard(otherPiece.getOldY())].setPiece(null);
+                Platform.runLater(() -> pieceGroup.getChildren().remove(otherPiece));
+
+                // Aggiorna il conteggio delle pedine catturate
+                if (otherPiece.getPieceType() == PieceType.GRAY || otherPiece.getPieceType() == PieceType.GRAY_SUP) {
+                    grayLivePieces--;
+                    whiteKilledPieces++;
+                } else {
+                    whiteLivePieces--;
+                    grayKilledPieces++;
+                }
+
+                // Aggiorna il display del punteggio
+                Platform.runLater(() -> scoreDisplay.updateCounts(grayLivePieces, whiteLivePieces, grayKilledPieces, whiteKilledPieces));
+
+                // FIXED: Per modalità online, gestione più accurata post-cattura
+                if (!mode.equals("local")) {
+                    waitingForServerResponse = false;
+
+                    // Controlla se ci sono altre catture possibili
+                    List<MoveResult> additionalCaptures = findPossibleCaptures(piece);
+                    if (!additionalCaptures.isEmpty()) {
+                        // Potenziale multi-jump - aspetta conferma server
+                        isInMultiJump = true;
+                        multiJumpPiece = piece;
+                        System.out.println("Potential multi-jump - waiting for server PING");
+                        // NON impostare isItMyTurn = false qui - aspetta il server
+                    } else {
+                        // Nessuna cattura possibile - turno finito
+                        isItMyTurn = false;
+                        isInMultiJump = false;
+                        multiJumpPiece = null;
+                        System.out.println("No more captures - turn ended");
+                    }
+                    updateOnlineLabel();
+                }
+
+                // Promozione
+                if ((newY == 7 && piece.getPieceType() == PieceType.GRAY) || (newY == 0 && piece.getPieceType() == PieceType.WHITE)) {
+                    Platform.runLater(piece::promote);
+                }
+
+                // Verifica se la partita è finita
+                checkForWinner();
+            }
+        }
+    }
+
+    // FIXED: Label aggiornata per modalità online
+    private void updateOnlineLabel() {
+        String status = isItMyTurn ? "YOUR TURN" : "OPPONENT'S TURN";
+        String playerColor = (player == 1) ? "GRAY" : "WHITE";
+        String extra = "";
+
+        if (waitingForServerResponse) {
+            extra = " (Sending move...)";
+        } else if (isInMultiJump) {
+            extra = " (Multi-Jump!)";
+        } else if (mustCapture && isItMyTurn) {
+            extra = " (Must Capture!)";
+        }
+
+        colorLabel.setText("You are " + playerColor + " - " + status + extra);
+    }
+
     /**
      * Trova tutte le catture possibili per una pedina specifica
      */
@@ -371,7 +550,7 @@ public class ChessBoardClient extends Application {
                     boolean isCurrentPlayerPiece = false;
 
                     if ("local".equals(mode)) {
-                        // Logica locale esistente
+                        // Logica locale
                         boolean isWhitePiece = piece.getPieceType() == PieceType.WHITE || piece.getPieceType() == PieceType.WHITE_SUP;
                         isCurrentPlayerPiece = (isWhiteTurn == isWhitePiece);
                     } else {
@@ -390,18 +569,16 @@ public class ChessBoardClient extends Application {
         return allCaptures;
     }
 
-
     /**
      * Aggiorna la variabile mustCapture in base alle catture disponibili
      */
     private void updateMustCapture() {
-        if ("local".equals(mode)) {
-            // Logica locale esistente
-            List<MoveResult> possibleCaptures = findAllPossibleCaptures();
-            mustCapture = !possibleCaptures.isEmpty();
+        if (isInMultiJump && multiJumpPiece != null) {
+            // Durante multi-jump, controlla solo la pedina corrente
+            List<MoveResult> captures = findPossibleCaptures(multiJumpPiece);
+            mustCapture = !captures.isEmpty();
         } else {
-            // Per online/CPU: aggiorna mustCapture quando riceviamo il PING
-            // Il server ci dirà implicitamente se dobbiamo catturare
+            // Controllo normale per tutte le pedine
             List<MoveResult> possibleCaptures = findAllPossibleCaptures();
             mustCapture = !possibleCaptures.isEmpty();
         }
@@ -488,105 +665,6 @@ public class ChessBoardClient extends Application {
         return new MoveResult(MoveType.NONE);
     }
 
-    public void requestMove(Piece piece, int newX, int newY) {
-        if (!isItMyTurn) {
-            System.out.println("Not my turn - aborting move");
-            piece.abortMove();
-            return;
-        }
-
-        // Verifica se la cella di destinazione è evidenziata (validazione lato client)
-        if (!isValidCoordinate(newX, newY) || !board[newX][newY].isHighlighted()) {
-            System.out.println("Invalid destination - aborting move");
-            piece.abortMove();
-            return;
-        }
-
-        try {
-            int oldBoardX = Coder.pixelToBoard(piece.getOldX());
-            int oldBoardY = Coder.pixelToBoard(piece.getOldY());
-            String moveMessage = oldBoardX + " " + oldBoardY + " " + newX + " " + newY;
-            System.out.println("Sending move: " + moveMessage);
-
-            bufferedWriter.write(moveMessage);
-            bufferedWriter.newLine();
-            bufferedWriter.flush();
-
-            // NON impostare isItMyTurn = false qui - lascia che sia il server a decidere
-            System.out.println("Move sent, waiting for server response...");
-        } catch (IOException e) {
-            System.out.println("Error sending move: " + e.getMessage());
-            piece.abortMove();
-            e.printStackTrace();
-        }
-    }
-
-    private void makeMove(Piece piece, int newX, int newY, MoveResult moveResult) {
-        MoveType moveType = moveResult.getMoveType();
-        switch (moveType) {
-            case NONE -> {
-                System.out.println("Move rejected - aborting");
-                piece.abortMove();
-                // Per le modalità online, potrebbe essere che dobbiamo aspettare un nuovo PING
-                if (!mode.equals("local")) {
-                    isItMyTurn = false; // Resetta il turno se la mossa è stata rifiutata
-                }
-            }
-            case NORMAL -> {
-                board[Coder.pixelToBoard(piece.getOldX())][Coder.pixelToBoard(piece.getOldY())].setPiece(null);
-                piece.move(newX, newY);
-                board[newX][newY].setPiece(piece);
-
-                // Per modalità online/CPU, il turno finisce dopo una mossa normale
-                if (!mode.equals("local")) {
-                    isItMyTurn = false;
-                    System.out.println("Normal move completed - turn ended");
-                }
-
-                // Promozione
-                if ((newY == 7 && piece.getPieceType() == PieceType.GRAY) || (newY == 0 && piece.getPieceType() == PieceType.WHITE)) {
-                    Platform.runLater(piece::promote);
-                }
-            }
-            case KILL -> {
-                board[Coder.pixelToBoard(piece.getOldX())][Coder.pixelToBoard(piece.getOldY())].setPiece(null);
-                piece.move(newX, newY);
-                board[newX][newY].setPiece(piece);
-
-                Piece otherPiece = moveResult.getPiece();
-                board[Coder.pixelToBoard(otherPiece.getOldX())][Coder.pixelToBoard(otherPiece.getOldY())].setPiece(null);
-                Platform.runLater(() -> pieceGroup.getChildren().remove(otherPiece));
-
-                // Aggiorna il conteggio delle pedine catturate
-                if (otherPiece.getPieceType() == PieceType.GRAY || otherPiece.getPieceType() == PieceType.GRAY_SUP) {
-                    grayLivePieces--;
-                    whiteKilledPieces++;
-                } else {
-                    whiteLivePieces--;
-                    grayKilledPieces++;
-                }
-
-                // Aggiorna il display del punteggio
-                Platform.runLater(() -> scoreDisplay.updateCounts(grayLivePieces, whiteLivePieces, grayKilledPieces, whiteKilledPieces));
-
-                // Per modalità online/CPU: dopo una cattura, aspetta la risposta del server
-                // Il server ci dirà se possiamo continuare (multi-jump) o se il turno è finito
-                if (!mode.equals("local")) {
-                    // NON impostare isItMyTurn = false qui - aspetta il server
-                    System.out.println("Capture completed - waiting for server to determine next action");
-                }
-
-                // Promozione
-                if ((newY == 7 && piece.getPieceType() == PieceType.GRAY) || (newY == 0 && piece.getPieceType() == PieceType.WHITE)) {
-                    Platform.runLater(piece::promote);
-                }
-
-                // Verifica se la partita è finita
-                checkForWinner();
-            }
-        }
-    }
-
     private void checkForWinner() {
         boolean grayExists = false;
         boolean whiteExists = false;
@@ -638,7 +716,7 @@ public class ChessBoardClient extends Application {
         Platform.runLater(victoryScreen::show);
     }
 
-    // Fixed method for local mode with separate timers
+    // FIXED: Timer locale con gestione corretta
     public void countTimeLocal() {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         executor.scheduleAtFixedRate(() -> {
@@ -672,7 +750,7 @@ public class ChessBoardClient extends Application {
         }, 0, 100, TimeUnit.MILLISECONDS);
     }
 
-    // Keep the original method for online mode
+    // FIXED: Timer online con controlli rigorosi
     public void countTime() {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         executor.scheduleAtFixedRate(() -> {
@@ -680,25 +758,28 @@ public class ChessBoardClient extends Application {
                 String winnerText = (winner == player) ? "YOU WON!" : "YOU LOST!";
                 Platform.runLater(() -> timer.set(winnerText));
 
-                // Versione tradotta per la modalità online
                 Platform.runLater(() -> {
                     if (winner == 1) {
                         showVictoryScreen("GRAY WON!");
-                    } else {
+                    } else if (winner == 2) {
                         showVictoryScreen("WHITE WON!");
+                    } else {
+                        showVictoryScreen("DRAW!");
                     }
                 });
                 executor.shutdown();
+                return;
             }
 
-            if (isItMyTurn) {
+            // FIXED: Timer continua SOLO se è il mio turno E non sto aspettando risposta
+            if (isItMyTurn && !waitingForServerResponse) {
                 time += 0.1;
                 Platform.runLater(() -> timer.set("Timer: " + (int) time + "s."));
             }
         }, 0, 100, TimeUnit.MILLISECONDS);
     }
 
-
+    // FIXED: Listener server completamente rivisto
     public void listenToServer() {
         new Thread(() -> {
             String message;
@@ -707,84 +788,18 @@ public class ChessBoardClient extends Application {
                 try {
                     message = bufferedReader.readLine();
                     if (message == null) {
+                        System.out.println("Server disconnected");
                         break;
                     }
 
                     System.out.println("Received from server: " + message);
 
                     if (message.startsWith("PING")) {
-                        isItMyTurn = true;
-                        // Aggiorna mustCapture quando riceviamo PING
-                        updateMustCapture();
-                        System.out.println("PING received - It's my turn! Must capture: " + mustCapture);
+                        handleServerPing();
+                    } else if (message.startsWith("CHAT ")) {
+                        handleChatMessage(message);
                     } else {
-                        String[] partsOfMessage = message.split(" ");
-                        if (partsOfMessage.length >= 5) {
-                            int fromX = Integer.parseInt(partsOfMessage[0]);
-                            int fromY = Integer.parseInt(partsOfMessage[1]);
-                            int newX = Integer.parseInt(partsOfMessage[2]);
-                            int newY = Integer.parseInt(partsOfMessage[3]);
-
-                            Piece piece = board[fromX][fromY].getPiece();
-                            if (piece == null) {
-                                System.out.println("No piece at " + fromX + "," + fromY);
-                                continue;
-                            }
-
-                            String moveType = partsOfMessage[4];
-                            System.out.println("Processing server response: " + moveType);
-
-                            switch (moveType) {
-                                case "NONE" -> {
-                                    System.out.println("Server rejected move");
-                                    makeMove(piece, newX, newY, new MoveResult(MoveType.NONE));
-                                    isInMultiJump = false;
-                                    multiJumpPiece = null;
-                                }
-                                case "NORMAL" -> {
-                                    System.out.println("Server confirmed normal move");
-                                    makeMove(piece, newX, newY, new MoveResult(MoveType.NORMAL));
-                                    isInMultiJump = false;
-                                    multiJumpPiece = null;
-                                }
-                                case "KILL" -> {
-                                    if (partsOfMessage.length >= 7) {
-                                        int killX = Integer.parseInt(partsOfMessage[5]);
-                                        int killY = Integer.parseInt(partsOfMessage[6]);
-                                        Piece killedPiece = board[killX][killY].getPiece();
-
-                                        System.out.println("Server confirmed capture move");
-                                        makeMove(piece, newX, newY, new MoveResult(MoveType.KILL, killedPiece));
-
-                                        // Controlla se ci sono altre catture possibili con la stessa pedina
-                                        List<MoveResult> additionalCaptures = findPossibleCaptures(piece);
-                                        if (!additionalCaptures.isEmpty() && isItMyTurn) {
-                                            // Multi-jump continua
-                                            isInMultiJump = true;
-                                            multiJumpPiece = piece;
-                                            mustCapture = true;
-                                            System.out.println("Multi-jump detected - must continue with same piece");
-                                        } else {
-                                            // Multi-jump finito
-                                            isInMultiJump = false;
-                                            multiJumpPiece = null;
-                                        }
-                                    }
-                                }
-                                case "END1" -> {
-                                    winner = 1;
-                                    Platform.runLater(() -> showVictoryScreen("GRAY WON!"));
-                                }
-                                case "END2" -> {
-                                    winner = 2;
-                                    Platform.runLater(() -> showVictoryScreen("WHITE WON!"));
-                                }
-                                case "DRAW" -> {
-                                    winner = 0;
-                                    Platform.runLater(() -> showVictoryScreen("DRAW - 40 moves without capture!"));
-                                }
-                            }
-                        }
+                        handleGameMessage(message);
                     }
                 } catch (IOException e) {
                     System.out.println("Connection lost: " + e.getMessage());
@@ -792,15 +807,126 @@ public class ChessBoardClient extends Application {
                     break;
                 } catch (NumberFormatException e) {
                     System.out.println("Invalid message format: " + e.getMessage());
+                } catch (Exception e) {
+                    System.out.println("Unexpected error: " + e.getMessage());
+                    e.printStackTrace();
                 }
             }
             closeEverything();
         }).start();
     }
 
+    // FIXED: Gestione PING separata e accurata
+    private void handleServerPing() {
+        System.out.println("PING received - It's my turn!");
+
+        // Reset completo dello stato per nuovo turno
+        isItMyTurn = true;
+        waitingForServerResponse = false;
+
+        // Se non eravamo in multi-jump, reset completo
+        if (!isInMultiJump) {
+            multiJumpPiece = null;
+        }
+
+        // Aggiorna mustCapture per il nuovo turno
+        updateMustCapture();
+
+        Platform.runLater(this::updateOnlineLabel);
+
+        System.out.println("Turn state: myTurn=" + isItMyTurn +
+                ", multiJump=" + isInMultiJump +
+                ", mustCapture=" + mustCapture);
+    }
+
+    // FIXED: Gestione messaggi chat separata
+    private void handleChatMessage(String message) {
+        // Per ora ignoriamo i messaggi chat lato client
+        // Potrebbero essere implementati in futuro
+        System.out.println("Chat message ignored: " + message);
+    }
+
+    // FIXED: Gestione messaggi di gioco separata e migliorata
+    private void handleGameMessage(String message) {
+        String[] partsOfMessage = message.split(" ");
+        if (partsOfMessage.length < 5) {
+            System.out.println("Invalid game message format: " + message);
+            return;
+        }
+
+        // Parse delle coordinate
+        int fromX, fromY, newX, newY;
+        try {
+            fromX = Integer.parseInt(partsOfMessage[0]);
+            fromY = Integer.parseInt(partsOfMessage[1]);
+            newX = Integer.parseInt(partsOfMessage[2]);
+            newY = Integer.parseInt(partsOfMessage[3]);
+        } catch (NumberFormatException e) {
+            System.out.println("Invalid coordinates in message: " + message);
+            return;
+        }
+
+        Piece piece = board[fromX][fromY].getPiece();
+        if (piece == null) {
+            System.out.println("No piece at " + fromX + "," + fromY);
+            return;
+        }
+
+        String moveType = partsOfMessage[4];
+        System.out.println("Processing server response: " + moveType);
+
+        switch (moveType) {
+            case "NONE" -> handleMoveRejected(piece, newX, newY);
+            case "NORMAL" -> handleNormalMove(piece, newX, newY);
+            case "KILL" -> handleKillMove(piece, newX, newY, partsOfMessage);
+            case "END1" -> handleGameEnd(1, "GRAY WON!");
+            case "END2" -> handleGameEnd(2, "WHITE WON!");
+            case "DRAW" -> handleGameEnd(0, "DRAW - 40 moves without capture!");
+            default -> System.out.println("Unknown move type: " + moveType);
+        }
+    }
+
+    private void handleMoveRejected(Piece piece, int newX, int newY) {
+        System.out.println("Server rejected move");
+        makeMove(piece, newX, newY, new MoveResult(MoveType.NONE));
+    }
+
+    private void handleNormalMove(Piece piece, int newX, int newY) {
+        System.out.println("Server confirmed normal move");
+        makeMove(piece, newX, newY, new MoveResult(MoveType.NORMAL));
+    }
+
+    private void handleKillMove(Piece piece, int newX, int newY, String[] parts) {
+        if (parts.length < 7) {
+            System.out.println("Invalid KILL message format");
+            return;
+        }
+
+        try {
+            int killX = Integer.parseInt(parts[5]);
+            int killY = Integer.parseInt(parts[6]);
+            Piece killedPiece = board[killX][killY].getPiece();
+
+            if (killedPiece == null) {
+                System.out.println("No piece to kill at " + killX + "," + killY);
+                return;
+            }
+
+            System.out.println("Server confirmed capture move");
+            makeMove(piece, newX, newY, new MoveResult(MoveType.KILL, killedPiece));
+
+        } catch (NumberFormatException e) {
+            System.out.println("Invalid kill coordinates");
+        }
+    }
+
+    private void handleGameEnd(int winnerPlayer, String message) {
+        winner = winnerPlayer;
+        Platform.runLater(() -> showVictoryScreen(message));
+    }
+
     /**
      * Evidenzia tutte le celle in cui è possibile muoversi con la pedina selezionata.
-     * MODIFICATO per rispettare la mangiata obbligatoria.
      */
     private void highlightPossibleMoves(Piece piece) {
         if (piece == null) return;
@@ -808,7 +934,7 @@ public class ChessBoardClient extends Application {
         int x = Coder.pixelToBoard(piece.getOldX());
         int y = Coder.pixelToBoard(piece.getOldY());
 
-        // Se mustCapture è true in qualsiasi modalità, evidenzia solo le catture
+        // Se mustCapture è true, evidenzia solo le catture
         if (mustCapture) {
             highlightOnlyCaptures(piece, x, y);
             return;
@@ -875,7 +1001,7 @@ public class ChessBoardClient extends Application {
      * Verifica se una cella è valida per una mossa normale e la evidenzia.
      */
     private void checkAndHighlightTile(int x, int y) {
-        if (isValidCoordinate(x, y) && !board[x][y].hasPiece()) {
+        if (isValidCoordinate(x, y) && !board[x][y].hasPiece() && (x + y) % 2 != 0) {
             board[x][y].highlight();
         }
     }
@@ -885,22 +1011,11 @@ public class ChessBoardClient extends Application {
      */
     private void checkAndHighlightCaptureTile(Piece piece, int destX, int destY, int middleX, int middleY) {
         if (isValidCoordinate(destX, destY) && isValidCoordinate(middleX, middleY) &&
-                !board[destX][destY].hasPiece() && board[middleX][middleY].hasPiece()) {
+                !board[destX][destY].hasPiece() && board[middleX][middleY].hasPiece() &&
+                (destX + destY) % 2 != 0) {
 
-            PieceType pieceType = piece.getPieceType();
-            PieceType middlePieceType = board[middleX][middleY].getPiece().getPieceType();
-
-            // Controlla se la pedina di mezzo è di colore opposto
-            boolean isOpponent = false;
-            if ((pieceType == PieceType.GRAY || pieceType == PieceType.GRAY_SUP) &&
-                    (middlePieceType == PieceType.WHITE || middlePieceType == PieceType.WHITE_SUP)) {
-                isOpponent = true;
-            } else if ((pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP) &&
-                    (middlePieceType == PieceType.GRAY || middlePieceType == PieceType.GRAY_SUP)) {
-                isOpponent = true;
-            }
-
-            if (isOpponent) {
+            Piece middlePiece = board[middleX][middleY].getPiece();
+            if (isOpponentPiece(piece, middlePiece)) {
                 board[destX][destY].highlight();
             }
         }
@@ -926,6 +1041,9 @@ public class ChessBoardClient extends Application {
 
     private void closeEverything() {
         try {
+            if (timeoutExecutor != null) {
+                timeoutExecutor.shutdown();
+            }
             if (bufferedReader != null) {
                 bufferedReader.close();
             }
