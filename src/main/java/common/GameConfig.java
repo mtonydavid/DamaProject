@@ -41,13 +41,13 @@ public final class GameConfig {
 
     // === UI SETTINGS ===
     /** Colore delle tile chiare */
-    public static final String LIGHT_TILE_COLOR = "#F0D9B5";
+    public static final String LIGHT_TILE_COLOR = "#C1A89F";
 
     /** Colore delle tile scure */
-    public static final String DARK_TILE_COLOR = "#B58863";
+    public static final String DARK_TILE_COLOR = "#5D5364";
 
     /** Colore evidenziazione mosse possibili */
-    public static final String HIGHLIGHT_COLOR = "#FFD700";
+    public static final String HIGHLIGHT_COLOR = "#BADA55";
 
     /** Colore pedine grigie */
     public static final String GRAY_PIECE_COLOR = "#4F4F4F";
