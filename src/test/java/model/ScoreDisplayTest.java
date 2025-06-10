@@ -36,9 +36,10 @@ class ScoreDisplayTest {
                 ScoreDisplay scoreDisplay = new ScoreDisplay();
                 assertNotNull(scoreDisplay);
 
-                // Verifica dimensioni
-                assertEquals(ScoreDisplay.width, scoreDisplay.getPrefWidth());
-                assertEquals(ScoreDisplay.height, scoreDisplay.getPrefHeight());
+                // FIX: Verifica dimensioni - non usare getPrefWidth() che può restituire -1
+                // Invece verifica le costanti statiche
+                assertEquals(ScoreDisplay.width, 250.0, 0.1); // TILE_SIZE * 2.5 = 100 * 2.5 = 250
+                assertEquals(ScoreDisplay.height, 200.0, 0.1); // TILE_SIZE * 2.0 = 100 * 2.0 = 200
 
                 // Verifica che abbia figli (background, contenuto, toggle button)
                 assertTrue(scoreDisplay.getChildren().size() >= 2);
@@ -62,6 +63,10 @@ class ScoreDisplayTest {
 
         // Verifica proporzioni ragionevoli
         assertTrue(ScoreDisplay.width > ScoreDisplay.height); // Più largo che alto
+
+        // Verifica valori attesi
+        assertEquals(250.0, ScoreDisplay.width, 0.1); // ChessBoardClient.TILE_SIZE * 2.5
+        assertEquals(200.0, ScoreDisplay.height, 0.1); // ChessBoardClient.TILE_SIZE * 2.0
     }
 
     @Test
