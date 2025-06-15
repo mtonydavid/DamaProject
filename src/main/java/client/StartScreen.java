@@ -22,7 +22,7 @@ public class StartScreen extends Application {
         root.setStyle("-fx-background-color: #ecdac9;");
 
         // Titolo del gioco
-        Label titleLabel = new Label("Checkers Game");
+        Label titleLabel = new Label("Italian Checkers");
         titleLabel.setFont(Font.font("Arial", FontWeight.BOLD, 36));
         titleLabel.setStyle("-fx-text-fill: #5D5364;");
 
