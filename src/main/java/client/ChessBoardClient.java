@@ -57,7 +57,7 @@ public class ChessBoardClient extends Application {
     private int whiteKilledPieces = 0;
     private final ScoreDisplay scoreDisplay = new ScoreDisplay();
 
-    // FIXED: Gestione turni migliorata per modalità online
+
     private boolean isItMyTurn = false;
     private boolean waitingForServerResponse = false;
 
@@ -66,14 +66,14 @@ public class ChessBoardClient extends Application {
 
     private Piece selectedPiece = null;
 
-    // NEW: Variables for advanced rules
+    //Variables for advanced rules
     private boolean mustCapture = false; // Mangiata obbligatoria
     private boolean isInMultiJump = false; // Multi-jump in corso
     private Piece multiJumpPiece = null; // Pedina che sta facendo multi-jump
     private int movesWithoutCapture = 0; // Contatore per regola dei 40 turni
     private final int MAX_MOVES_WITHOUT_CAPTURE = 40; // Limite per patta
 
-    // FIXED: Timeout per evitare blocchi
+    //Timeout per evitare blocchi
     private ScheduledExecutorService timeoutExecutor;
 
     public static void main(String[] args) {
@@ -129,13 +129,12 @@ public class ChessBoardClient extends Application {
                 closeEverything();
             }
 
-            // FIXED: Inizializza timeout executor
             timeoutExecutor = Executors.newSingleThreadScheduledExecutor();
             countTime();
             listenToServer();
         } else {
             // Modalità locale, senza connessione
-            player = 1; // Keep this for compatibility, but use isWhiteTurn for actual turn management
+            player = 1;
             countTimeLocal();
             isWhiteTurn = true; // WHITE starts first in local mode
         }
@@ -224,7 +223,7 @@ public class ChessBoardClient extends Application {
         return piece;
     }
 
-    // FIXED: Separata logica per selezione pezzi locale
+
     private void handleLocalPieceSelection(Piece piece, PieceType pieceType) {
         boolean isWhitePiece = pieceType == PieceType.WHITE || pieceType == PieceType.WHITE_SUP;
 
@@ -239,7 +238,7 @@ public class ChessBoardClient extends Application {
         }
     }
 
-    // FIXED: Separata logica per selezione pezzi online
+
     private void handleOnlinePieceSelection(Piece piece, PieceType pieceType) {
         if (!isItMyTurn || waitingForServerResponse) {
             return;
@@ -341,14 +340,12 @@ public class ChessBoardClient extends Application {
     }
 
     public void requestMove(Piece piece, int newX, int newY) {
-        // FIXED: Controlli più rigorosi
         if (!isItMyTurn || waitingForServerResponse) {
             System.out.println("Cannot move: myTurn=" + isItMyTurn + ", waiting=" + waitingForServerResponse);
             piece.abortMove();
             return;
         }
 
-        // Verifica se la cella di destinazione è evidenziata (validazione lato client)
         if (!isValidCoordinate(newX, newY) || !board[newX][newY].isHighlighted()) {
             System.out.println("Invalid destination - aborting move");
             piece.abortMove();
@@ -365,7 +362,6 @@ public class ChessBoardClient extends Application {
             bufferedWriter.newLine();
             bufferedWriter.flush();
 
-            // FIXED: Imposta stato e timeout
             waitingForServerResponse = true;
             startMoveTimeout();
 
@@ -378,7 +374,7 @@ public class ChessBoardClient extends Application {
         }
     }
 
-    // FIXED: Timeout per evitare blocchi
+
     private void startMoveTimeout() {
         if (timeoutExecutor != null) {
             timeoutExecutor.schedule(() -> {
@@ -399,7 +395,6 @@ public class ChessBoardClient extends Application {
             case NONE -> {
                 System.out.println("Move rejected - aborting");
                 piece.abortMove();
-                // FIXED: Reset completo stato per modalità online
                 if (!mode.equals("local")) {
                     waitingForServerResponse = false;
                     isItMyTurn = false;
@@ -413,7 +408,6 @@ public class ChessBoardClient extends Application {
                 piece.move(newX, newY);
                 board[newX][newY].setPiece(piece);
 
-                // FIXED: Per modalità online, reset stato dopo mossa normale
                 if (!mode.equals("local")) {
                     waitingForServerResponse = false;
                     isItMyTurn = false; // Il turno finisce dopo una mossa normale
@@ -423,7 +417,6 @@ public class ChessBoardClient extends Application {
                     System.out.println("Normal move completed - turn ended");
                 }
 
-                // Promozione
                 if ((newY == 7 && piece.getPieceType() == PieceType.GRAY) || (newY == 0 && piece.getPieceType() == PieceType.WHITE)) {
                     Platform.runLater(piece::promote);
                 }
@@ -449,7 +442,6 @@ public class ChessBoardClient extends Application {
                 // Aggiorna il display del punteggio
                 Platform.runLater(() -> scoreDisplay.updateCounts(grayLivePieces, whiteLivePieces, grayKilledPieces, whiteKilledPieces));
 
-                // FIXED: Per modalità online, gestione più accurata post-cattura
                 if (!mode.equals("local")) {
                     waitingForServerResponse = false;
 
@@ -460,7 +452,7 @@ public class ChessBoardClient extends Application {
                         isInMultiJump = true;
                         multiJumpPiece = piece;
                         System.out.println("Potential multi-jump - waiting for server PING");
-                        // NON impostare isItMyTurn = false qui - aspetta il server
+
                     } else {
                         // Nessuna cattura possibile - turno finito
                         isItMyTurn = false;
@@ -482,7 +474,6 @@ public class ChessBoardClient extends Application {
         }
     }
 
-    // FIXED: Label aggiornata per modalità online
     private void updateOnlineLabel() {
         String status = isItMyTurn ? "YOUR TURN" : "OPPONENT'S TURN";
         String playerColor = (player == 1) ? "GRAY" : "WHITE";
@@ -716,7 +707,6 @@ public class ChessBoardClient extends Application {
         Platform.runLater(victoryScreen::show);
     }
 
-    // FIXED: Timer locale con gestione corretta
     public void countTimeLocal() {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         executor.scheduleAtFixedRate(() -> {
@@ -750,7 +740,6 @@ public class ChessBoardClient extends Application {
         }, 0, 100, TimeUnit.MILLISECONDS);
     }
 
-    // FIXED: Timer online con controlli rigorosi
     public void countTime() {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         executor.scheduleAtFixedRate(() -> {
@@ -771,7 +760,6 @@ public class ChessBoardClient extends Application {
                 return;
             }
 
-            // FIXED: Timer continua SOLO se è il mio turno E non sto aspettando risposta
             if (isItMyTurn && !waitingForServerResponse) {
                 time += 0.1;
                 Platform.runLater(() -> timer.set("Timer: " + (int) time + "s."));
@@ -779,7 +767,6 @@ public class ChessBoardClient extends Application {
         }, 0, 100, TimeUnit.MILLISECONDS);
     }
 
-    // FIXED: Listener server completamente rivisto
     public void listenToServer() {
         new Thread(() -> {
             String message;
@@ -816,7 +803,6 @@ public class ChessBoardClient extends Application {
         }).start();
     }
 
-    // FIXED: Gestione PING separata e accurata
     private void handleServerPing() {
         System.out.println("PING received - It's my turn!");
 
@@ -839,14 +825,11 @@ public class ChessBoardClient extends Application {
                 ", mustCapture=" + mustCapture);
     }
 
-    // FIXED: Gestione messaggi chat separata
+
     private void handleChatMessage(String message) {
-        // Per ora ignoriamo i messaggi chat lato client
-        // Potrebbero essere implementati in futuro
         System.out.println("Chat message ignored: " + message);
     }
 
-    // FIXED: Gestione messaggi di gioco separata e migliorata
     private void handleGameMessage(String message) {
         String[] partsOfMessage = message.split(" ");
         if (partsOfMessage.length < 5) {

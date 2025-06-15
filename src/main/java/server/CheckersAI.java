@@ -11,7 +11,7 @@ import java.util.Random;
 
 /**
  * AI implementation for the CPU player in the checkers game.
- * Makes intelligent moves based on game strategy rather than random moves.
+ * Makes intelligent moves based on game strategy
  */
 public class CheckersAI {
     private final Tile[][] board;
@@ -24,9 +24,6 @@ public class CheckersAI {
 
     /**
      * Creates a new CheckersAI with the specified color and board state.
-     *
-     * @param board The current game board state
-     * @param isWhite True if the AI is playing as white, false if playing as gray
      */
     public CheckersAI(Tile[][] board, boolean isWhite) {
         this.board = board;
@@ -48,8 +45,6 @@ public class CheckersAI {
 
     /**
      * Generates the best move based on current board state.
-     *
-     * @return A string in the format "fromX fromY toX toY" representing the move
      */
     public String generateBestMove() {
         // Find all possible moves
@@ -82,8 +77,6 @@ public class CheckersAI {
 
     /**
      * Finds all possible moves for the AI player.
-     *
-     * @return A list of possible moves with their priorities
      */
     private List<Move> findAllPossibleMoves() {
         List<Move> moves = new ArrayList<>();
@@ -129,7 +122,6 @@ public class CheckersAI {
             // Kings can move in all diagonal directions
             directions = new int[][]{{1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
         } else {
-            // Regular pieces can only capture forward (and the diagonal)
             directions = new int[][]{{1, moveDirection}, {-1, moveDirection}};
         }
 

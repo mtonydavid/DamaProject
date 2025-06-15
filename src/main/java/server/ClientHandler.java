@@ -29,7 +29,6 @@ public class ClientHandler implements Runnable {
     // Aggiungiamo un parametro per il ritardo della CPU (in millisecondi)
     private final long cpuMoveDelay = 1000; // 1 secondo di ritardo
 
-    // NEW: Variables for advanced rules
     private boolean mustCapture = false;
     private boolean isInMultiJump = false;
     private int currentPlayer = -1; // -1 = GRAY turn, 1 = WHITE turn
@@ -92,7 +91,6 @@ public class ClientHandler implements Runnable {
                 if (moveProcessed && !isInMultiJump) {
                     i++; // Incrementa solo se la mossa è stata processata e non siamo in multi-jump
                 } else if (!moveProcessed && !isInMultiJump) {
-                    // Se la mossa non è stata processata e non siamo in multi-jump, potrebbe essere un errore
                     // Aggiungi un piccolo delay per evitare loop infiniti
                     Thread.sleep(100);
                 }
@@ -205,9 +203,6 @@ public class ClientHandler implements Runnable {
         return new MoveResult(MoveType.NONE);
     }
 
-    /**
-     * Trova tutte le catture possibili per il giocatore corrente
-     */
     private List<MoveResult> findAllPossibleCaptures(int moveDir) {
         List<MoveResult> allCaptures = new ArrayList<>();
 
@@ -244,10 +239,10 @@ public class ClientHandler implements Runnable {
         // Direzioni da controllare in base al tipo di pedina
         int[][] directions;
         if (piece.getPieceType() == PieceType.GRAY_SUP || piece.getPieceType() == PieceType.WHITE_SUP) {
-            // Dame: tutte le direzioni
+
             directions = new int[][]{{-1, -1}, {-1, 1}, {1, -1}, {1, 1}};
         } else {
-            // Pedine normali: solo avanti
+
             int moveDir = piece.getPieceType().moveDir;
             directions = new int[][]{{-1, moveDir}, {1, moveDir}};
         }
@@ -355,7 +350,7 @@ public class ClientHandler implements Runnable {
                 try {
                     System.out.println("CPU sta pensando...");
                     Thread.sleep(cpuMoveDelay);
-                    System.out.println("CPU ha completato il pensiero e sta eseguendo la mossa");
+                    System.out.println("CPU sta eseguendo la mossa");
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     System.out.println("La pausa della CPU è stata interrotta");
@@ -366,7 +361,7 @@ public class ClientHandler implements Runnable {
                 if (ai != null) {
                     messageFrom = ai.generateBestMove();
                 } else {
-                    messageFrom = Coder.generateMove(); // Fallback
+                    messageFrom = Coder.generateMove();
                 }
             }
 

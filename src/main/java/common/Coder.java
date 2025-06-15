@@ -9,9 +9,6 @@ import java.util.Random;
 /**
  * Utility class per encoding/decoding delle mosse e conversioni coordinate.
  * Versione refactored che usa GameConfig invece di dipendenze circolari.
- *
- * @author DamaProject Team
- * @version 2.0
  */
 public final class Coder {
 
@@ -26,9 +23,6 @@ public final class Coder {
 
     /**
      * Converte coordinate pixel in coordinate scacchiera.
-     *
-     * @param pixelCoordinate coordinata in pixel
-     * @return coordinata scacchiera (0-7)
      */
     public static int pixelToBoard(double pixelCoordinate) {
         return GameConfig.pixelToBoardCoordinate(pixelCoordinate);
@@ -36,9 +30,6 @@ public final class Coder {
 
     /**
      * Converte coordinate scacchiera in coordinate pixel.
-     *
-     * @param boardCoordinate coordinata scacchiera (0-7)
-     * @return coordinata in pixel
      */
     public static int boardToPixel(int boardCoordinate) {
         return GameConfig.boardToPixelCoordinate(boardCoordinate);
@@ -46,12 +37,6 @@ public final class Coder {
 
     /**
      * Codifica una mossa in formato stringa per invio al server.
-     *
-     * @param piece pedina che si muove
-     * @param newX nuova coordinata X
-     * @param newY nuova coordinata Y
-     * @param moveResult risultato della mossa
-     * @return stringa codificata della mossa
      */
     public static String encode(Piece piece, int newX, int newY, MoveResult moveResult) {
         if (piece == null) {
@@ -89,8 +74,6 @@ public final class Coder {
 
     /**
      * Genera una mossa casuale valida per fallback dell'AI.
-     *
-     * @return stringa mossa nel formato "x1 y1 x2 y2"
      */
     public static String generateMove() {
         // Genera coordinate casuali valide
@@ -104,9 +87,6 @@ public final class Coder {
 
     /**
      * Valida il formato di una stringa mossa.
-     *
-     * @param moveString stringa da validare
-     * @return true se il formato è valido
      */
     public static boolean isValidMoveFormat(String moveString) {
         if (moveString == null || moveString.trim().isEmpty()) {
@@ -133,9 +113,6 @@ public final class Coder {
 
     /**
      * Decodifica una stringa mossa in componenti separate.
-     *
-     * @param moveString stringa mossa da decodificare
-     * @return array con [fromX, fromY, toX, toY] o null se invalida
      */
     public static int[] decodeMoveCoordinates(String moveString) {
         if (!isValidMoveFormat(moveString)) {
@@ -153,12 +130,6 @@ public final class Coder {
 
     /**
      * Calcola la distanza Manhattan tra due punti.
-     *
-     * @param x1 coordinata x del primo punto
-     * @param y1 coordinata y del primo punto
-     * @param x2 coordinata x del secondo punto
-     * @param y2 coordinata y del secondo punto
-     * @return distanza Manhattan
      */
     public static int manhattanDistance(int x1, int y1, int x2, int y2) {
         return Math.abs(x2 - x1) + Math.abs(y2 - y1);
@@ -166,12 +137,6 @@ public final class Coder {
 
     /**
      * Verifica se una mossa è di tipo cattura (distanza 2 in diagonale).
-     *
-     * @param fromX coordinata x di partenza
-     * @param fromY coordinata y di partenza
-     * @param toX coordinata x di arrivo
-     * @param toY coordinata y di arrivo
-     * @return true se è una mossa di cattura
      */
     public static boolean isCaptureMove(int fromX, int fromY, int toX, int toY) {
         int deltaX = Math.abs(toX - fromX);
@@ -181,12 +146,6 @@ public final class Coder {
 
     /**
      * Verifica se una mossa è normale (distanza 1 in diagonale).
-     *
-     * @param fromX coordinata x di partenza
-     * @param fromY coordinata y di partenza
-     * @param toX coordinata x di arrivo
-     * @param toY coordinata y di arrivo
-     * @return true se è una mossa normale
      */
     public static boolean isNormalMove(int fromX, int fromY, int toX, int toY) {
         int deltaX = Math.abs(toX - fromX);
