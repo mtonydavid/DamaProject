@@ -184,9 +184,9 @@ public class ChessBoardClient extends Application {
         colorLabel.relocate(0, 0);
 
         if ("local".equals(mode)) {
-            updateTurnLabel();
+            Platform.runLater(this::updateTurnLabel);
         } else {
-            updateOnlineLabel();
+            Platform.runLater(this::updateOnlineLabel);
         }
 
         // Aggiorna il display del punteggio iniziale
@@ -312,7 +312,7 @@ public class ChessBoardClient extends Application {
                     // Multi-jump: la stessa pedina deve continuare a catturare
                     isInMultiJump = true;
                     multiJumpPiece = piece;
-                    updateTurnLabel(); // Aggiorna la label per mostrare il multi-jump
+                    Platform.runLater(this::updateTurnLabel); // Aggiorna la label per mostrare il multi-jump
                     return; // Non cambiare turno
                 } else {
                     // Nessuna cattura aggiuntiva possibile
@@ -338,7 +338,7 @@ public class ChessBoardClient extends Application {
 
             // Aggiorna mustCapture per il prossimo turno
             updateMustCapture();
-            updateTurnLabel();
+            Platform.runLater(this::updateTurnLabel);
         }
     }
 
@@ -403,9 +403,10 @@ public class ChessBoardClient extends Application {
                     isItMyTurn = false;
                     isInMultiJump = false;
                     multiJumpPiece = null;
-                    updateOnlineLabel();
+                    Platform.runLater(this::updateOnlineLabel); // FIX: Wrap questa chiamata
                 }
             }
+
             case NORMAL -> {
                 board[Coder.pixelToBoard(piece.getOldX())][Coder.pixelToBoard(piece.getOldY())].setPiece(null);
                 piece.move(newX, newY);
@@ -413,10 +414,10 @@ public class ChessBoardClient extends Application {
 
                 if (!mode.equals("local")) {
                     waitingForServerResponse = false;
-                    isItMyTurn = false; // Il turno finisce dopo una mossa normale
+                    isItMyTurn = false;
                     isInMultiJump = false;
                     multiJumpPiece = null;
-                    updateOnlineLabel();
+                    Platform.runLater(this::updateOnlineLabel); // FIX: Wrap questa chiamata
                     System.out.println("Normal move completed - turn ended");
                 }
 
@@ -424,6 +425,7 @@ public class ChessBoardClient extends Application {
                     Platform.runLater(piece::promote);
                 }
             }
+
             case KILL -> {
                 board[Coder.pixelToBoard(piece.getOldX())][Coder.pixelToBoard(piece.getOldY())].setPiece(null);
                 piece.move(newX, newY);
@@ -442,36 +444,29 @@ public class ChessBoardClient extends Application {
                     grayKilledPieces++;
                 }
 
-                // Aggiorna il display del punteggio
                 Platform.runLater(() -> scoreDisplay.updateCounts(grayLivePieces, whiteLivePieces, grayKilledPieces, whiteKilledPieces));
 
                 if (!mode.equals("local")) {
                     waitingForServerResponse = false;
 
-                    // Controlla se ci sono altre catture possibili
                     List<MoveResult> additionalCaptures = findPossibleCaptures(piece);
                     if (!additionalCaptures.isEmpty()) {
-                        // Potenziale multi-jump - aspetta conferma server
                         isInMultiJump = true;
                         multiJumpPiece = piece;
                         System.out.println("Potential multi-jump - waiting for server PING");
-
                     } else {
-                        // Nessuna cattura possibile - turno finito
                         isItMyTurn = false;
                         isInMultiJump = false;
                         multiJumpPiece = null;
                         System.out.println("No more captures - turn ended");
                     }
-                    updateOnlineLabel();
+                    Platform.runLater(this::updateOnlineLabel); // FIX: Wrap questa chiamata
                 }
 
-                // Promozione
                 if ((newY == 7 && piece.getPieceType() == PieceType.GRAY) || (newY == 0 && piece.getPieceType() == PieceType.WHITE)) {
                     Platform.runLater(piece::promote);
                 }
 
-                // Verifica se la partita è finita
                 checkForWinner();
             }
         }
@@ -688,26 +683,28 @@ public class ChessBoardClient extends Application {
     }
 
     private void showVictoryScreen(String winnerText) {
-        // Get the total time for the winner in local mode
-        int gameTimeInSeconds;
-        if ("local".equals(mode)) {
-            // In local mode, show the time of the winning player
-            gameTimeInSeconds = (winner == 1) ? (int) grayTime : (winner == 2) ? (int) whiteTime : Math.max((int) grayTime, (int) whiteTime);
-        } else {
-            gameTimeInSeconds = (int) time;
-        }
+        Platform.runLater(() -> {
+            // Get the total time for the winner in local mode
+            int gameTimeInSeconds;
+            if ("local".equals(mode)) {
+                // In local mode, show the time of the winning player
+                gameTimeInSeconds = (winner == 1) ? (int) grayTime : (winner == 2) ? (int) whiteTime : Math.max((int) grayTime, (int) whiteTime);
+            } else {
+                gameTimeInSeconds = (int) time;
+            }
 
-        VictoryScreen victoryScreen = new VictoryScreen(
-                winnerText,
-                gameTimeInSeconds,
-                grayLivePieces,
-                whiteLivePieces,
-                grayKilledPieces,
-                whiteKilledPieces,
-                mode
-        );
+            VictoryScreen victoryScreen = new VictoryScreen(
+                    winnerText,
+                    gameTimeInSeconds,
+                    grayLivePieces,
+                    whiteLivePieces,
+                    grayKilledPieces,
+                    whiteKilledPieces,
+                    mode
+            );
 
-        Platform.runLater(victoryScreen::show);
+            victoryScreen.show();
+        });
     }
 
     public void countTimeLocal() {
@@ -735,10 +732,10 @@ public class ChessBoardClient extends Application {
             // Update the timer for the current player
             if (isWhiteTurn) {
                 whiteTime += 0.1;
-                Platform.runLater(() -> whiteTimer.set("WHITE: " + (int) whiteTime + "s"));
+                Platform.runLater(() -> whiteTimer.set("WHITE: " + (int) whiteTime + "s")); // FIX: Wrap timer update
             } else {
                 grayTime += 0.1;
-                Platform.runLater(() -> grayTimer.set("GRAY: " + (int) grayTime + "s"));
+                Platform.runLater(() -> grayTimer.set("GRAY: " + (int) grayTime + "s")); // FIX: Wrap timer update
             }
         }, 0, 100, TimeUnit.MILLISECONDS);
     }
@@ -748,7 +745,7 @@ public class ChessBoardClient extends Application {
         executor.scheduleAtFixedRate(() -> {
             if (winner != 0) {
                 String winnerText = (winner == player) ? "YOU WON!" : "YOU LOST!";
-                Platform.runLater(() -> timer.set(winnerText));
+                Platform.runLater(() -> timer.set(winnerText)); // FIX: Wrap timer update
 
                 Platform.runLater(() -> {
                     if (winner == 1) {
@@ -765,7 +762,7 @@ public class ChessBoardClient extends Application {
 
             if (isItMyTurn && !waitingForServerResponse) {
                 time += 0.1;
-                Platform.runLater(() -> timer.set("Timer: " + (int) time + "s."));
+                Platform.runLater(() -> timer.set("Timer: " + (int) time + "s.")); // FIX: Wrap timer update
             }
         }, 0, 100, TimeUnit.MILLISECONDS);
     }
@@ -908,7 +905,7 @@ public class ChessBoardClient extends Application {
 
     private void handleGameEnd(int winnerPlayer, String message) {
         winner = winnerPlayer;
-        Platform.runLater(() -> showVictoryScreen(message));
+        showVictoryScreen(message); // Rimuovi Platform.runLater qui, è già in showVictoryScreen
     }
 
     /**
