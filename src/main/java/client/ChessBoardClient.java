@@ -77,7 +77,10 @@ public class ChessBoardClient extends Application {
     private ScheduledExecutorService timeoutExecutor;
 
     public static void main(String[] args) {
-        if (args.length > 0) {
+        for (String arg : args) {
+            System.out.println("Argument: " + arg);
+        }
+        if (args.length > 1) {
             // Se ci sono argomenti, avvia direttamente la partita
             launch(args);
         } else {
