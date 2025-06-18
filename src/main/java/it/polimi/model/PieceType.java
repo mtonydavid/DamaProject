@@ -1,5 +1,5 @@
 
-package model;
+package it.polimi.model;
 
 public enum PieceType {
     GRAY(1), WHITE(-1), GRAY_SUP(2), WHITE_SUP(-2);

@@ -1,5 +1,8 @@
 package model;
 
+import it.polimi.model.Piece;
+import it.polimi.model.PieceType;
+import it.polimi.model.Tile;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

@@ -1,13 +1,13 @@
-package server;
+package it.polimi.server;
 
-import client.ChessBoardClient;
-import common.Coder;
-import model.*;
+import it.polimi.client.ChessBoardClient;
+import it.polimi.common.Coder;
+import it.polimi.model.*;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 
 public class ClientHandler implements Runnable {
     private final Tile[][] board = new Tile[ChessBoardClient.WIDTH][ChessBoardClient.HEIGHT];

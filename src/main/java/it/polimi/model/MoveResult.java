@@ -1,4 +1,4 @@
-package model;
+package it.polimi.model;
 
 public class MoveResult {
     private final MoveType moveType;

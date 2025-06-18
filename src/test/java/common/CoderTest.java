@@ -1,6 +1,10 @@
 package common;
 
-import model.*;
+import it.polimi.common.Coder;
+import it.polimi.model.MoveResult;
+import it.polimi.model.MoveType;
+import it.polimi.model.Piece;
+import it.polimi.model.PieceType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;

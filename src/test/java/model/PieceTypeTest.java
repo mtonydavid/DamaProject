@@ -1,5 +1,6 @@
 package model;
 
+import it.polimi.model.PieceType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;

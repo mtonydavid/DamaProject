@@ -1,5 +1,7 @@
-import client.ChessBoardClient;
-import server.Server;
+package it.polimi;
+
+import it.polimi.client.ChessBoardClient;
+import it.polimi.server.Server;
 
 import java.io.IOException;
 

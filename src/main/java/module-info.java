@@ -3,10 +3,10 @@ module DamaProject {
     requires javafx.controls;
     requires javafx.graphics;
 
-    opens client;
-    exports client;
-    opens server;
-    exports server;
-    opens model;
-    exports model;
+    opens it.polimi.client;
+    exports it.polimi.client;
+    opens it.polimi.server;
+    exports it.polimi.server;
+    opens it.polimi.model;
+    exports it.polimi.model;
 }

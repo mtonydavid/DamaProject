@@ -1,6 +1,6 @@
-package model;
+package it.polimi.model;
 
-import client.ChessBoardClient;
+import it.polimi.client.ChessBoardClient;
 import javafx.animation.TranslateTransition;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;

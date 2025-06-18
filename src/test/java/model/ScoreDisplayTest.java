@@ -1,6 +1,7 @@
 package model;
 
-import client.ChessBoardClient;
+import it.polimi.client.ChessBoardClient;
+import it.polimi.model.ScoreDisplay;
 import javafx.application.Platform;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;

@@ -68,7 +68,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>Starter</mainClass>
+                            <mainClass>it.polimi.Starter</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
@@ -92,7 +92,7 @@
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
                 <configuration>
-                    <mainClass>client.ChessBoardClient</mainClass>
+                    <mainClass>it.polimi.client.ChessBoardClient</mainClass>
                 </configuration>
             </plugin>
         </plugins>

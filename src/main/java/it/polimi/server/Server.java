@@ -1,5 +1,5 @@
 
-package server;
+package it.polimi.server;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -8,7 +8,7 @@ import java.net.Socket;
     public record Server(ServerSocket serverSocket) {
         public static void main(String[] args) throws IOException {
             ServerSocket serverSocket = new ServerSocket(1234);
-            server.Server server = new server.Server(serverSocket);
+            Server server = new Server(serverSocket);
             server.startServer();
         }
 

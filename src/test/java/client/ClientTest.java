@@ -1,9 +1,10 @@
 package client;
 
-import common.GameConfig;
+import it.polimi.client.ChessBoardClient;
+import it.polimi.common.GameConfig;
 import javafx.application.Platform;
-import model.ScoreDisplay;
-import model.Timer;
+import it.polimi.model.ScoreDisplay;
+import it.polimi.model.Timer;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

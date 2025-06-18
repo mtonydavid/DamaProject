@@ -1,8 +1,10 @@
-package server;
+package it.polimi.server;
 
-import client.ChessBoardClient;
-import model.*;
-import common.Coder;
+import it.polimi.client.ChessBoardClient;
+import it.polimi.common.Coder;
+import it.polimi.model.Piece;
+import it.polimi.model.PieceType;
+import it.polimi.model.Tile;
 
 import java.util.ArrayList;
 import java.util.Comparator;

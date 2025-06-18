@@ -1,8 +1,10 @@
 package server;
 
-import model.Piece;
-import model.PieceType;
-import model.Tile;
+import it.polimi.server.CheckersAI;
+import it.polimi.server.Server;
+import it.polimi.model.Piece;
+import it.polimi.model.PieceType;
+import it.polimi.model.Tile;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

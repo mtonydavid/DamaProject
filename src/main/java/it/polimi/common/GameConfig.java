@@ -1,4 +1,4 @@
-package common;
+package it.polimi.common;
 
 /**
  * Configurazione centralizzata del gioco.

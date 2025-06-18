@@ -1,5 +1,5 @@
 
-package model;
+package it.polimi.model;
 
 public enum MoveType {
     NONE, NORMAL, KILL;

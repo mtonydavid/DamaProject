@@ -1,6 +1,6 @@
-package model;
+package it.polimi.model;
 
-import common.GameConfig;
+import it.polimi.common.GameConfig;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 

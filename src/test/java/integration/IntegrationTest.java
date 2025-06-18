@@ -1,12 +1,12 @@
 package integration;
 
-import client.ChessBoardClient;
-import common.Coder;
-import common.GameConfig;
-import model.*;
+import it.polimi.client.ChessBoardClient;
+import it.polimi.common.Coder;
+import it.polimi.common.GameConfig;
+import it.polimi.model.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import server.CheckersAI;
+import it.polimi.server.CheckersAI;
 
 import static org.junit.jupiter.api.Assertions.*;
 

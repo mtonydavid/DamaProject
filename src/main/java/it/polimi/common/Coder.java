@@ -1,8 +1,8 @@
-package common;
+package it.polimi.common;
 
-import model.MoveResult;
-import model.MoveType;
-import model.Piece;
+import it.polimi.model.MoveResult;
+import it.polimi.model.MoveType;
+import it.polimi.model.Piece;
 
 import java.util.Random;
 

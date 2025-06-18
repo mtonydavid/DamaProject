@@ -1,4 +1,4 @@
-package client;
+package it.polimi.client;
 
 import javafx.application.Application;
 import javafx.geometry.Insets;

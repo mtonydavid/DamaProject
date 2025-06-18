@@ -1,21 +1,21 @@
-package client;
+package it.polimi.client;
 
-import common.Coder;
+import it.polimi.common.Coder;
+import it.polimi.model.*;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.scene.Group;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Pane;
 import javafx.stage.Stage;
-import model.*;
-import javafx.scene.input.MouseEvent;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;

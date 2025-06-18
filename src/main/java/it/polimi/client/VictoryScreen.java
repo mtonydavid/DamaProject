@@ -1,4 +1,4 @@
-package client;
+package it.polimi.client;
 
 import javafx.animation.*;
 import javafx.application.Platform;
@@ -20,7 +20,7 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.Duration;
-import model.PieceType;
+import it.polimi.model.PieceType;
 
 public class VictoryScreen {
     private static final int WIDTH = 500;
