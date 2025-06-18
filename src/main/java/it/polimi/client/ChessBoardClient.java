@@ -332,7 +332,7 @@ public class ChessBoardClient extends Application {
             // Controlla la regola dei 40 turni
             if (movesWithoutCapture >= MAX_MOVES_WITHOUT_CAPTURE) {
                 winner = 0; // Patta
-                showVictoryScreen("DRAW - 40 moves without capture!");
+                showVictoryScreen("DRAW");
                 return;
             }
 
